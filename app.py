@@ -22,7 +22,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Initialize Gemini
 genai.configure(api_key="AIzaSyD2ArK74wBtL1ufYmpyrV2LqaOBrSi3mlU")
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro",
+    model_name="gemini-1.5-flash",
     safety_settings=[
         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
@@ -745,13 +745,21 @@ Multiple trigger components flag: {has_multiple_triggers}
 Trigger component message: {multiple_triggers_message}
 Journey status message: {journey_status_message}
 
+VERY IMPORTANT: You must ONLY offer the user choices from the available screen components in the list below.
+Do NOT suggest or imply that they can add any components not in this list (like text, images, buttons, etc.).
+Instead, present the exact screen component options available and ask them to choose from these specific options.
+
+Available screen components (ONLY THESE can be used):
+{screen_components_info}
+
 Generate a helpful prompt that:
 1. Summarizes what has been done so far
-2. If there are multiple trigger components that need user selection, include the formatted message about choosing trigger components
-3. If there are journey completion requirements, include the message about what's needed to complete the journey
-4. Otherwise, asks for specific information needed next
-5. Provides options for the user (if applicable)
-6. Explains how to confirm, change or cancel
+2. Lists the EXACT available screen components by name and asks the user to choose from ONLY these options
+3. If there are multiple trigger components that need user selection, include the formatted message about choosing trigger components
+4. If there are journey completion requirements, include the message about what's needed to complete the journey
+5. Explains how to confirm, change or cancel
+
+IMPORTANT: DO NOT mention any components or options not in the available screen components list.
 """
                 next_prompt = get_gemini_response(next_prompt_prompt)
                 
