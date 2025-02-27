@@ -213,6 +213,19 @@ def init_journey():
 SYSTEM_PROMPT = """
 You are an AI assistant helping users build a journey configuration for a financial application.
 
+AVAILABLE SCREEN COMPONENTS:
+Only use these exact component names - users cannot create custom components:
+1. CustomerDetails - For capturing personal details
+2. AccountDetails - For capturing account information
+3. PAN - For PAN card validation
+4. IdentityVerification - For KYC checks
+5. AddressProof - For address verification
+6. TermsAndConditions - For legal acceptance
+7. AccountSummary - For showing account overview
+8. DocumentUpload - For uploading required documents
+9. OTP - For verification codes
+10. Calendar - For date selection
+
 YOUR MAIN TASK is to generate a complete JSON for the journey configuration based on user inputs.
 
 REQUIRED JOURNEY STRUCTURE:
@@ -240,62 +253,24 @@ FOR NAVIGATION:
 3. We'll use button clicks for navigation with "navigation_type": "button_click"
 4. Each navigation will use a trigger_component_id from the source screen's field components
 
-AVAILABLE SCREEN COMPONENTS IDs:
-- CustomerDetails: 1
-- AccountDetails: 2
-- PAN: 3
-- IdentityVerification: 4
-- AddressProof: 5
-- TermsAndConditions: 6
-- AccountSummary: 7
-- DocumentUpload: 8
-- OTP: 9
-- Calendar: 10
+IMPORTANT RULES:
+1. Always provide the full, updated journey JSON in your response using the format JSON_OUTPUT: {...}
+2. DO NOT show the JSON to the user in your conversational response
+3. If the user mentions a component not in the list above, ONLY suggest components from the predefined list
+4. Guide the user step by step through the journey building process
+5. When finalizing, create a flow diagram using Mermaid syntax with the format FLOW_DIAGRAM: ```mermaid...```
 
-IMPORTANT JSON GENERATION RULES:
-1. Always provide the full, updated journey JSON in your response
-2. Include the complete journey_name, no_screens, screens array, and navigation array
-3. Make sure screen IDs are sequential starting from 1
-4. Make sure each screen component has the correct ID and name
-5. Make sure each screen component has field_components populated with realistic data
-
-INTERACTION GUIDANCE:
-1. Guide the user step by step through the journey building process
-2. If the user tries to finalize early, explain what's still missing
-3. Always update the JSON based on the user's inputs, even if incomplete
-4. Don't use technical jargon - keep explanations user-friendly
-5. When the user provides information in a single message, integrate all of it into the JSON
+USER INTERACTION:
+1. Always list the available components when asking for screen components
+2. Enforce that users can only select from the predefined component list
+3. Be conversational and helpful, explaining each step clearly
+4. When confirming the journey, present a clear summary of screens and navigation
 
 RESPONSE FORMAT:
 Every response must include:
-1. A conversational response to the user
-2. JSON_OUTPUT: <complete journey JSON>
-
-Example output:
-I've updated your journey with the screen information you provided.
-
-JSON_OUTPUT: {
-  "journey_name": "helloworld",
-  "journey_type": "single",
-  "no_screens": 2,
-  "screens": [
-    {
-      "screen_id": 1,
-      "screen_name": "screenhello",
-      "template": "defaultTemplate",
-      "style": "defaultScreenStyle",
-      "screen_components": [
-        {
-          "screen_component_id": 5,
-          "screen_component_name": "AddressProof",
-          "screen_component_style": "defaultScreenComponentStyle",
-          "field_components": [...]
-        }
-      ]
-    }
-  ],
-  "navigation": [...]
-}
+1. A conversational response to the user (without JSON)
+2. Hidden from user: JSON_OUTPUT: <complete journey JSON>
+3. If finalizing, include: FLOW_DIAGRAM: ```mermaid...```
 """
 
 # Route for health check
@@ -321,13 +296,14 @@ def start_conversation():
     }
     
     # Get component options
-    component_options = ", ".join([comp["name"] for comp in get_mock_screen_components()])
+    component_options = ", ".join([f"{comp['id']}. {comp['name']}" for comp in get_mock_screen_components()])
     
     # Initial prompt
     initial_prompt = f"""
     I'll help you build a journey configuration for your financial application.
     
-    Available screen components: {component_options}
+    You can choose from these screen components:
+    {component_options}
     
     Let's start by defining the basic details:
     
@@ -335,14 +311,6 @@ def start_conversation():
     2. How many screens would you like in this journey?
     
     Once we have these details, I'll guide you through setting up each screen.
-    
-    JSON_OUTPUT: {{
-      "journey_name": "",
-      "journey_type": "single",
-      "no_screens": 0,
-      "screens": [],
-      "navigation": []
-    }}
     """
     
     # Store system prompt and initial messages
@@ -382,10 +350,10 @@ def validate_journey_completeness(journey):
     
     # Check navigation
     if no_screens > 1:
-        expected_navigations = no_screens - 1
+        expected_navigations = 1  # Changed to require at least 1 navigation
         actual_navigations = len(journey.get("navigation", []))
         if actual_navigations < expected_navigations:
-            errors.append(f"Expected {expected_navigations} navigations but found {actual_navigations}")
+            errors.append(f"Expected at least {expected_navigations} navigation but found {actual_navigations}")
     
     return errors
 
@@ -448,6 +416,25 @@ def extract_json_from_response(response_text):
             return None
         except:
             return None
+
+# Extract flow diagram from Gemini's response
+def extract_flow_diagram(response_text):
+    flow_start = response_text.find('FLOW_DIAGRAM:')
+    
+    if flow_start == -1:
+        return None
+    
+    flow_text = response_text[flow_start + len('FLOW_DIAGRAM:'):].strip()
+    
+    # Handle the case where diagram is enclosed in triple backticks
+    if flow_text.startswith('```mermaid'):
+        flow_text = flow_text[len('```mermaid'):].strip()
+        end_marker = flow_text.find('```')
+        if end_marker != -1:
+            flow_text = flow_text[:end_marker].strip()
+            return flow_text
+    
+    return None
 
 # Create a complete journey object with field components
 def complete_journey_with_field_components(journey):
@@ -530,8 +517,7 @@ def determine_conversation_state(journey):
     
     # Check navigation
     if journey.get("no_screens", 0) > 1:
-        expected_navigations = journey.get("no_screens", 0) - 1
-        if len(journey.get("navigation", [])) < expected_navigations:
+        if len(journey.get("navigation", [])) < 1:
             return "defining_navigation"
     
     return "complete"
@@ -562,18 +548,24 @@ def process_message():
     finalizing = should_finalize(user_message)
     
     # Format the current journey context for Gemini
-    components_info = "\n".join([f"- {comp['name']}: ID {comp['id']}" for comp in get_mock_screen_components()])
+    component_details = "\n".join([f"{comp['id']}. {comp['name']}" for comp in get_mock_screen_components()])
     journey_context = f"""
     Current journey configuration:
     {json.dumps(journey, indent=2)}
     
     Available screen components:
-    {components_info}
+    {component_details}
     
     Remember to generate a complete, updated journey JSON in your response using the format:
     JSON_OUTPUT: {{...}}
     
-    Make sure to include proper field_components in each screen component.
+    DO NOT show the JSON to the user in your conversational response.
+    
+    If this appears to be a finalization request, please also include a flow diagram using Mermaid syntax:
+    FLOW_DIAGRAM: ```mermaid
+    flowchart TD
+    ...
+    ```
     """
     
     try:
@@ -598,6 +590,11 @@ def process_message():
         # Extract JSON from Gemini's response
         extracted_journey = extract_json_from_response(ai_response)
         
+        # Extract flow diagram if finalizing
+        flow_diagram = None
+        if finalizing:
+            flow_diagram = extract_flow_diagram(ai_response)
+        
         if extracted_journey:
             # Complete the journey with field components
             completed_journey = complete_journey_with_field_components(extracted_journey)
@@ -605,25 +602,25 @@ def process_message():
             # Update session with new journey
             session_data['journey'] = completed_journey
             
-            # Clean the AI response by removing the JSON part
+            # Clean the AI response by removing the JSON and flow diagram parts
+            cleaned_response = ai_response
+            
             json_start = ai_response.find('JSON_OUTPUT:')
             if json_start != -1:
                 cleaned_response = ai_response[:json_start].strip()
-            else:
-                # Try to find JSON in code block format
-                json_start = ai_response.find('```json')
-                if json_start != -1:
-                    json_end = ai_response.find('```', json_start + 7)
-                    if json_end != -1:
-                        cleaned_response = ai_response[:json_start].strip() + ai_response[json_end + 3:].strip()
-                    else:
-                        cleaned_response = ai_response
-                else:
-                    cleaned_response = ai_response
+            
+            flow_start = cleaned_response.find('FLOW_DIAGRAM:')
+            if flow_start != -1:
+                cleaned_response = cleaned_response[:flow_start].strip()
         else:
             # If no JSON was extracted, keep the original journey
             completed_journey = journey
-            cleaned_response = ai_response + "\n\nNote: I couldn't generate a proper journey configuration. Please provide more details."
+            cleaned_response = ai_response
+            
+            # Still clean any FLOW_DIAGRAM part
+            flow_start = cleaned_response.find('FLOW_DIAGRAM:')
+            if flow_start != -1:
+                cleaned_response = cleaned_response[:flow_start].strip()
         
         # Add AI response to chat history
         session_data['chat_history'].append({"role": "assistant", "content": cleaned_response})
@@ -640,13 +637,24 @@ def process_message():
                     "journey_json": completed_journey
                 }), 200
             else:
-                # Journey is complete and ready to finalize
-                return jsonify({
-                    "message": f"Journey '{completed_journey.get('journey_name', 'Unnamed')}' has been finalized.",
-                    "journey_state": "complete",
-                    "session_id": session_id,
-                    "journey_json": completed_journey
-                }), 200
+                # If we have a flow diagram, include it in the response
+                if flow_diagram:
+                    finalize_message = f"Journey '{completed_journey.get('journey_name', 'Unnamed')}' has been finalized.\n\nHere's a visualization of your journey flow:"
+                    return jsonify({
+                        "message": finalize_message,
+                        "journey_state": "complete",
+                        "session_id": session_id,
+                        "journey_json": completed_journey,
+                        "flow_diagram": flow_diagram
+                    }), 200
+                else:
+                    # Journey is complete but no flow diagram
+                    return jsonify({
+                        "message": f"Journey '{completed_journey.get('journey_name', 'Unnamed')}' has been finalized.",
+                        "journey_state": "complete",
+                        "session_id": session_id,
+                        "journey_json": completed_journey
+                    }), 200
         
         # Regular response during journey building
         return jsonify({
