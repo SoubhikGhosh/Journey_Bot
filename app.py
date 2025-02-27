@@ -449,19 +449,27 @@ Your task is to generate JSON based on user requirements, following these rules:
    - If multiple trigger components exist, ask the user to choose
    - If no trigger component exists, create navigation but ask the user to add one
 
-7. You CANNOT create new screen_components or field_components. You must use existing ones from the provided lists.
+7. VERY IMPORTANT: You can ONLY use the screen components available in the list below. DO NOT create new screen or field components.
 
-8. When the user wants to add a new screen, you must:
+8. If the user requests a component that's not available in the list below follow these STRICTLY:
+   - DO NOT try to create or add that component or prompt the user to do so
+   - In your next_prompt response (not in the JSON), immediately inform the user that the requested component is not available
+   - Suggest they choose from the available components instead
+   - DO NOT include unavailable components in the JSON
+
+9. When the user wants to add a new screen, you must:
    - Select an appropriate screen_component from the available list
-   - For field_components, the system will automatically fetch them - just include an empty field_components array
+   - For field_components, just create an empty array - the system will automatically populate it
 
-9. If the user requests a specific screen component by name or function, choose the most appropriate one from the available options. If the user's request is ambiguous, select the most relevant screen component.
+10. Inform the user of the present screen components. 
 
-10. Be polite when asking for missing information. If the user doesn't specify something important, ask for it specifically.
+11. If the user requests a specific screen component by name or function, select the closest match from the available options.
 
-11. Keep track of the current state of the journey as the conversation progresses.
+12. Be polite when asking for missing information. If the user doesn't specify something important, ask for it specifically.
 
-Available screen components: 
+13. Keep track of the current state of the journey as the conversation progresses.
+
+Available screen components (ONLY USE THESE - no exceptions): 
 {screen_components_info}
 
 Current journey state:
@@ -584,8 +592,8 @@ User's last message: {user_message}
 
 Generate a helpful prompt that:
 1. Summarizes what has been done so far
-2. Asks for specific information needed next (only required fields)
-3. Does not contain any suggestion for creating any field component or screen component
+2. Asks for specific information needed next
+3. Provides options for the user (if applicable)
 4. Explains how to confirm, change or cancel
 """
                 next_prompt = get_gemini_response(next_prompt_prompt)
@@ -606,4 +614,4 @@ Generate a helpful prompt that:
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
