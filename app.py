@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
 import uuid
@@ -8,10 +8,7 @@ import re
 from datetime import datetime
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Initialize Flask app
@@ -32,15 +29,6 @@ model = genai.GenerativeModel(
     generation_config={"temperature": 0.7, "top_p": 0.95, "top_k": 40}
 )
 
-# Function to get response from Gemini
-def get_gemini_response(prompt_text):
-    try:
-        response = model.generate_content(prompt_text)
-        return response.text
-    except Exception as e:
-        logger.error(f"Gemini API error: {str(e)}")
-        return '{}'
-
 # Session storage
 sessions = {}
 
@@ -53,307 +41,75 @@ MOCK_SCREEN_COMPONENTS = [
     {"screen_component_id": 5, "screen_component_name": "status"}
 ]
 
-# Sample field components response - used for mocking only
-SAMPLE_FIELD_COMPONENTS = {
-    "CustomerDetails": [
-        {
-            "fieldComponentId": 1,
-            "fieldType": "largetext",
-            "fieldName": "customerDetailsHeading",
-            "fieldLabel": "Enter Customer Details",
-            "validations": {},
-            "dataSource": None,
-            "dependencies": None,
-            "isTriggerComponent": False,
-            "createdAt": "2025-02-23T12:06:37.958916",
-            "updatedAt": "2025-02-23T12:06:37.904855",
-            "style": "defaultFieldStyle"
-        },
-        {
-            "fieldComponentId": 28,
-            "fieldType": "text_field",
-            "fieldName": "firstname",
-            "fieldLabel": "First Name",
-            "validations": {
-                "required": True,
-                "requiredMessage": "First Name is required",
-                "minLength": 3,
-                "minLengthMessage": "Firstname must be at least 3 characters",
-                "helperText": "Enter a Firstname between 3-20 characters"
-            },
-            "dataSource": None,
-            "dependencies": None,
-            "isTriggerComponent": False,
-            "createdAt": "2025-02-24T09:55:40.602092",
-            "updatedAt": "2025-02-24T09:55:40.568178",
-            "style": "defaultFieldStyle"
-        }
-    ]
-}
+# Helper function to detect ambiguous inputs
+def is_ambiguous_input(message):
+    """Check if the user message is too vague to generate a journey structure"""
+    ambiguous_patterns = [r'^add \d+ screens?$', r'^create \d+ screens?$', r'^make \d+ screens?$']
+    return any(re.match(pattern.strip(), message.strip(), re.IGNORECASE) for pattern in ambiguous_patterns)
+
+# Function to get response from Gemini
+def get_gemini_response(prompt_text, user_message=None):
+    try:
+        # Check if user message is ambiguous before sending to Gemini
+        if user_message and is_ambiguous_input(user_message):
+            return "I need more specific information. Please provide details about what kind of screens you'd like to add, their names, and their components."
+        
+        response = model.generate_content(prompt_text)
+        return response.text
+    except Exception as e:
+        logger.error(f"Gemini API error: {str(e)}")
+        return '{}'
 
 # Function to fetch screen components (mocked)
 def fetch_screen_components():
-    """
-    Mock function to fetch screen components from secondary backend
-    
-    # Actual API call would be:
-    # import requests
-    # response = requests.get("https://backend.example.com/api/screen-components")
-    # return response.json()
-    """
+    """Mock function to fetch screen components from secondary backend"""
     return MOCK_SCREEN_COMPONENTS
 
 # Function to fetch field components for a screen component
 def fetch_field_components(screen_component_name):
-    """
-    Function to fetch field components for a screen component from secondary backend
-    
-    For now, we'll use a mock implementation, but in production:
-    import requests
-    response = requests.get(f"https://backend.example.com/api/field-components/{screen_component_name}")
-    return response.json()
-    """
+    """Simplified field components fetch function with minimal data"""
     logger.info(f"Fetching field components for: {screen_component_name}")
     
-    # Mock response - this would be replaced with actual API call
-    if screen_component_name == "CustomerDetails":
-        # Return a more complete field components list from the document
-        return [
-            {
-                "fieldComponentId": 1,
-                "fieldType": "largetext",
-                "fieldName": "customerDetailsHeading",
-                "fieldLabel": "Enter Customer Details",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:06:37.958916",
-                "updatedAt": "2025-02-23T12:06:37.904855",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 28,
-                "fieldType": "text_field",
-                "fieldName": "firstname",
-                "fieldLabel": "First Name",
-                "validations": {
-                    "required": True,
-                    "requiredMessage": "First Name is required",
-                    "minLength": 3,
-                    "minLengthMessage": "Firstname must be at least 3 characters",
-                    "helperText": "Enter a Firstname between 3-20 characters"
-                },
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-24T09:55:40.602092",
-                "updatedAt": "2025-02-24T09:55:40.568178",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 2,
-                "fieldType": "text_field",
-                "fieldName": "lastname",
-                "fieldLabel": "Last Name",
-                "validations": {
-                    "required": True,
-                    "requiredMessage": "Last Name is required",
-                    "minLength": 3,
-                    "minLengthMessage": "Lastname must be at least 3 characters",
-                    "helperText": "Enter a Lastname between 3-20 characters"
-                },
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:07:33.156551",
-                "updatedAt": "2025-02-23T12:07:33.136884",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 10,
-                "fieldType": "button",
-                "fieldName": "customDtlBtn",
-                "fieldLabel": "Proceed >",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": True,
-                "createdAt": "2025-02-23T12:15:13.945457",
-                "updatedAt": "2025-02-23T12:15:13.930879",
-                "style": "defaultFieldStyle"
-            }
+    # Basic components for different screen types (simplified)
+    basic_components = {
+        "CustomerDetails": [
+            {"fieldComponentId": 1, "fieldType": "largetext", "fieldName": "customerDetailsHeading", "fieldLabel": "Enter Customer Details", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
+            {"fieldComponentId": 10, "fieldType": "button", "fieldName": "customDtlBtn", "fieldLabel": "Proceed >", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": True, "style": "defaultFieldStyle"}
+        ],
+        "pan": [
+            {"fieldComponentId": 11, "fieldType": "largetext", "fieldName": "panDetailsHeading", "fieldLabel": "Enter PAN Details", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
+            {"fieldComponentId": 13, "fieldType": "button", "fieldName": "validatePanBtn", "fieldLabel": "Validate PAN", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": True, "style": "defaultFieldStyle"}
+        ],
+        "aadhar": [
+            {"fieldComponentId": 14, "fieldType": "largetext", "fieldName": "aadharHeadingDetails", "fieldLabel": "Enter Aadhar Details", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
+            {"fieldComponentId": 16, "fieldType": "button", "fieldName": "validateAadhar", "fieldLabel": "Validate Aadhar", 
+             "validations": {}, "dataSource": "validateaadhar", "dependencies": None, "isTriggerComponent": True, "style": "defaultFieldStyle"}
+        ],
+        "otp": [
+            {"fieldComponentId": 17, "fieldType": "largetext", "fieldName": "otpHeading", "fieldLabel": "Enter OTP", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
+            {"fieldComponentId": 18, "fieldType": "otp", "fieldName": "otp", "fieldLabel": "OTP", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"}
+        ],
+        "status": [
+            {"fieldComponentId": 19, "fieldType": "statustext", "fieldName": "status", "fieldLabel": "status", 
+             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
+            {"fieldComponentId": 20, "fieldType": "button", "fieldName": "homeScreenButton", "fieldLabel": "Home Screen", 
+             "validations": {}, "dataSource": "gotohomescreen", "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"}
         ]
-    elif screen_component_name == "pan":
-        return [
-            {
-                "fieldComponentId": 11,
-                "fieldType": "largetext",
-                "fieldName": "panDetailsHeading",
-                "fieldLabel": "Enter PAN Details",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:16:29.365502",
-                "updatedAt": "2025-02-23T12:16:29.352896",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 12,
-                "fieldType": "text_field",
-                "fieldName": "pan",
-                "fieldLabel": "PAN",
-                "validations": {
-                    "required": True,
-                    "pattern": "[A-Z]{5}[0-9]{4}[A-Z]",
-                    "patternError": "Please enter a valid PAN number"
-                },
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:18:15.277552",
-                "updatedAt": "2025-02-23T12:18:15.26131",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 13,
-                "fieldType": "button",
-                "fieldName": "validatePanBtn",
-                "fieldLabel": "Validate PAN",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": True,
-                "createdAt": "2025-02-23T12:19:33.008951",
-                "updatedAt": "2025-02-23T12:19:32.995502",
-                "style": "defaultFieldStyle"
-            }
-        ]
-    elif screen_component_name == "aadhar":
-        return [
-            {
-                "fieldComponentId": 14,
-                "fieldType": "largetext",
-                "fieldName": "aadharHeadingDetails",
-                "fieldLabel": "Enter Aadhar Details",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:27:20.931269",
-                "updatedAt": "2025-02-23T12:27:20.906399",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 15,
-                "fieldType": "text_field",
-                "fieldName": "aadhar",
-                "fieldLabel": "Aadhar Number",
-                "validations": {
-                    "required": True,
-                    "pattern": "[0-9]{12}",
-                    "patternError": "Please enter a valid Aadhar number"
-                },
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:28:06.266728",
-                "updatedAt": "2025-02-23T12:28:06.257313",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 16,
-                "fieldType": "button",
-                "fieldName": "validateAadhar",
-                "fieldLabel": "Validate Aadhar",
-                "validations": {},
-                "dataSource": "validateaadhar",
-                "dependencies": None,
-                "isTriggerComponent": True,
-                "createdAt": "2025-02-23T12:28:51.948309",
-                "updatedAt": "2025-02-23T12:28:51.923045",
-                "style": "defaultFieldStyle"
-            }
-        ]
-    elif screen_component_name == "otp":
-        return [
-            {
-                "fieldComponentId": 17,
-                "fieldType": "largetext",
-                "fieldName": "otpHeading",
-                "fieldLabel": "Enter OTP",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:29:14.083147",
-                "updatedAt": "2025-02-23T12:29:14.071053",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 18,
-                "fieldType": "otp",
-                "fieldName": "otp",
-                "fieldLabel": "OTP",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T12:29:30.918031",
-                "updatedAt": "2025-02-23T12:29:30.908255",
-                "style": "defaultFieldStyle"
-            }
-        ]
-    elif screen_component_name == "status":
-        return [
-            {
-                "fieldComponentId": 19,
-                "fieldType": "statustext",
-                "fieldName": "status",
-                "fieldLabel": "status",
-                "validations": {},
-                "dataSource": None,
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T23:24:15.569678",
-                "updatedAt": "2025-02-23T23:24:15.548801",
-                "style": "defaultFieldStyle"
-            },
-            {
-                "fieldComponentId": 20,
-                "fieldType": "button",
-                "fieldName": "homeScreenButton",
-                "fieldLabel": "Home Screen",
-                "validations": {},
-                "dataSource": "gotohomescreen",
-                "dependencies": None,
-                "isTriggerComponent": False,
-                "createdAt": "2025-02-23T23:25:36.440081",
-                "updatedAt": "2025-02-23T23:25:36.419469",
-                "style": "defaultFieldStyle"
-            }
-        ]
+    }
     
-    # Default empty array for unknown components
-    return []
-
-# New endpoint to fetch field components for a screen component
-@app.route('/journey/api/field-components/<screen_component_name>', methods=['GET'])
-def get_field_components(screen_component_name):
-    """API endpoint to get field components for a specific screen component"""
-    field_components = fetch_field_components(screen_component_name)
-    return jsonify(field_components)
+    return basic_components.get(screen_component_name, [])
 
 # Function to extract trigger component selection from user message
 def extract_trigger_selection(message, screen_names):
-    """
-    Extract trigger component selection from user message
-    Returns a dict with screen_id/name as key and trigger_id as value
-    """
+    """Extract trigger component selection from user message"""
     selections = {}
-    
-    # Common patterns for trigger selection
     patterns = [
         r"use trigger (?:component )?(id )?(\d+) for (?:screen )?(?:id )?(\d+|[a-zA-Z]+)",
         r"for (?:screen )?(?:id )?(\d+|[a-zA-Z]+) use trigger (?:component )?(id )?(\d+)",
@@ -361,7 +117,6 @@ def extract_trigger_selection(message, screen_names):
         r"choose trigger (?:component )?(id )?(\d+) for (?:screen )?(?:id )?(\d+|[a-zA-Z]+)"
     ]
     
-    # Try to match patterns
     for pattern in patterns:
         matches = re.findall(pattern, message.lower())
         if matches:
@@ -373,7 +128,6 @@ def extract_trigger_selection(message, screen_names):
                     trigger_id = match[1]
                     screen_identifier = match[0]
                 
-                # Try to convert screen identifier to id if it's a number
                 try:
                     screen_id = int(screen_identifier)
                     selections[screen_id] = int(trigger_id)
@@ -387,10 +141,7 @@ def extract_trigger_selection(message, screen_names):
 
 # Function to validate the journey
 def validate_journey(journey, full_check=True):
-    """
-    Validate the journey for completeness and correctness
-    Returns dict with valid (bool) and message (str) keys
-    """
+    """Validate the journey for completeness and correctness"""
     # Check for required top-level fields
     if not journey.get("journey_name"):
         return {"valid": False, "message": "Add a name for your journey."}
@@ -404,7 +155,7 @@ def validate_journey(journey, full_check=True):
     if journey.get("no_screens", 0) != len(screens):
         journey["no_screens"] = len(screens)
     
-    # Don't perform detailed validation unless we're doing a full check (e.g., for confirmation)
+    # Skip detailed validation if not doing a full check
     if not full_check:
         return {"valid": True, "message": ""}
     
@@ -420,17 +171,6 @@ def validate_journey(journey, full_check=True):
             return {"valid": False, "message": f"Screen {screen['screen_name']} is missing a style."}
         if "screen_components" not in screen:
             return {"valid": False, "message": f"Screen {screen['screen_name']} is missing screen_components."}
-        
-        # Check each screen component
-        for sc in screen.get("screen_components", []):
-            if "screen_component_id" not in sc:
-                return {"valid": False, "message": f"A screen component in screen {screen['screen_name']} is missing a screen_component_id."}
-            if "screen_component_name" not in sc:
-                return {"valid": False, "message": f"Screen component {sc.get('screen_component_id')} in screen {screen['screen_name']} is missing a screen_component_name."}
-            if "screen_component_style" not in sc:
-                return {"valid": False, "message": f"Screen component {sc.get('screen_component_name')} in screen {screen['screen_name']} is missing a screen_component_style."}
-            if "field_components" not in sc:
-                return {"valid": False, "message": f"Screen component {sc.get('screen_component_name')} in screen {screen['screen_name']} is missing field_components."}
     
     # Check navigation completeness
     navigation = journey.get("navigation", [])
@@ -461,31 +201,8 @@ def validate_journey(journey, full_check=True):
     if missing_triggers:
         return {"valid": False, "message": f"Choose trigger components for: {', '.join(missing_triggers)}"}
     
-    # Check for disconnected screens
-    if len(screens) > 1:
-        # Create a graph of screen connections
-        connected_screens = set()
-        for nav in navigation:
-            if "source_screen_id" in nav and "target_screen_id" in nav:
-                connected_screens.add(nav["source_screen_id"])
-                connected_screens.add(nav["target_screen_id"])
-        
-        # Find disconnected screens
-        disconnected = []
-        for screen in screens:
-            if "screen_id" in screen and screen["screen_id"] not in connected_screens:
-                if "screen_name" in screen:
-                    disconnected.append(f"{screen['screen_name']} (ID: {screen['screen_id']})")
-                else:
-                    disconnected.append(f"Screen ID {screen['screen_id']}")
-        
-        if disconnected:
-            return {"valid": False, "message": f"Connect these screens to your journey: {', '.join(disconnected)}"}
-    
     # All checks passed
     return {"valid": True, "message": ""}
-
-        
 
 @app.route('/journey/api/health', methods=['GET'])
 def health_check():
@@ -561,42 +278,29 @@ def process_message():
         }
         next_prompt = "Journey creation has been cancelled. Let's start again. What would you like to name this journey?"
     else:
-        # Check if the message contains trigger component selection
-        # Build a map of screen names to screen IDs for easier reference
-        screen_names_map = {}
-        for screen in current_journey.get("screens", []):
-            if "screen_name" in screen and "screen_id" in screen:
-                screen_names_map[screen["screen_name"].lower()] = screen["screen_id"]
-        
-        # Extract trigger selections if any
+        # Check if user message is too ambiguous
+        if is_ambiguous_input(user_message):
+            next_prompt = ("I need more specific information. Please provide details about what kind of screens "
+                          "you'd like to add, their names, and their components. You can choose from these components: " +
+                          ", ".join([comp["screen_component_name"] for comp in session_data["screen_components"]]))
+            return jsonify({
+                "journey_json": current_journey,
+                "next_prompt": next_prompt,
+                "final": False,
+                "needs_trigger_selection": any("trigger_component_id" not in nav for nav in current_journey.get("navigation", []))
+            })
+            
+        # Process trigger component selections if any
+        screen_names_map = {screen["screen_name"].lower(): screen["screen_id"] for screen in current_journey.get("screens", []) if "screen_name" in screen}
         trigger_selections = extract_trigger_selection(user_message, screen_names_map)
         
-        # Apply any trigger selections to the navigation
+        # Apply trigger selections to navigation
         if trigger_selections:
-            # Track which selections were successfully applied
-            applied_selections = []
-            
             for nav in current_journey.get("navigation", []):
                 if "source_screen_id" in nav and "trigger_component_id" not in nav:
                     source_id = nav["source_screen_id"]
-                    
-                    # Check if we have a selection for this screen (by ID)
                     if source_id in trigger_selections:
                         nav["trigger_component_id"] = trigger_selections[source_id]
-                        applied_selections.append(f"Screen ID {source_id}")
-                    
-                    # Check if we have a selection for this screen (by name)
-                    source_screen = next((s for s in current_journey.get("screens", []) 
-                                        if s.get("screen_id") == source_id), None)
-                    if source_screen and "screen_name" in source_screen:
-                        screen_name = source_screen["screen_name"].lower()
-                        if screen_name in trigger_selections:
-                            nav["trigger_component_id"] = trigger_selections[screen_name]
-                            applied_selections.append(f"Screen '{source_screen['screen_name']}'")
-            
-            # If we applied any selections, notify the user but continue with regular processing
-            if applied_selections:
-                logger.info(f"Applied trigger selections for: {', '.join(applied_selections)}")
         
         # Process with Gemini
         try:
@@ -606,13 +310,17 @@ def process_message():
                 for sc in session_data["screen_components"]
             ])
             
-            # Create a message for Gemini that includes the current journey state
+            # Create prompt for Gemini
             gemini_prompt = f"""
 You are an AI assistant that helps users create journey JSON configurations for a banking application. 
 Your task is to generate JSON based on user requirements, following these rules:
 
 1. You must ONLY return valid JSON in your response - no explanations, no comments, no additional text.
-2. The journey structure MUST EXACTLY follow this format:
+2. DO NOT make assumptions about the journey structure. If the user's request is vague or ambiguous, 
+   do not generate JSON. Instead, return a plain text message asking for more specific details.
+3. Only add elements that the user explicitly requests. Do not populate screens or components unless 
+   specifically instructed by the user.
+4. The journey structure MUST EXACTLY follow this format:
    ```json
    {{
      "journey_name": "Name of the journey (e.g., SavingAccountJourney)",
@@ -645,32 +353,36 @@ Your task is to generate JSON based on user requirements, following these rules:
    }}
    ```
    
-3. EVERY screen MUST have these exact fields:
+5. EVERY screen MUST have these exact fields:
    - screen_id
    - screen_name
    - template (always "defaultTemplate")
    - style (always "defaultScreenStyle")
    - screen_components (array)
 
-4. EVERY screen_component MUST have these exact fields:
+6. EVERY screen_component MUST have these exact fields:
    - screen_component_id
    - screen_component_name
    - screen_component_style (always "defaultScreenComponentStyle")
    - field_components (array)
 
-5. EVERY navigation MUST have these exact fields:
+7. EVERY navigation MUST have these exact fields:
    - source_screen_id
    - target_screen_id
    - trigger_component_id
    - navigation_type (always "button_click")
 
-6. You can ONLY use the screen components available in the list below. DO NOT create new screen components.
+8. You can ONLY use the screen components available in the list below. DO NOT create new screen components.
 
-7. The no_screens field MUST match the number of items in the screens array.
+9. The no_screens field MUST match the number of items in the screens array.
 
-8. NEVER use names like "from_screen_id" or "to_screen_id" - use EXACTLY "source_screen_id" and "target_screen_id".
+10. NEVER use names like "from_screen_id" or "to_screen_id" - use EXACTLY "source_screen_id" and "target_screen_id".
 
-9. NEVER use a structure like "screen_component": {{ "id": 4, "name": "otp" }} - instead use the proper structure with screen_components as an array of objects.
+11. NEVER use a structure like "screen_component": {{ "id": 4, "name": "otp" }} - instead use the proper structure with screen_components as an array of objects.
+
+12. Do NOT ASSUME or CREATE any data. Let the unknown fields be empty.
+
+13. If the user request is ambiguous (like "add 3 screens" without specifying what screens), add empty but structured screens objects with empty values and direct the user to put in values for each field politely.
 
 Available screen components (ONLY USE THESE - no exceptions): 
 {screen_components_info}
@@ -682,11 +394,26 @@ User message: {user_message}
 
 Create or update the journey JSON based on the user's message. 
 Return ONLY the JSON with no explanations or additional text.
+If the input is too vague or ambiguous, do not generate a JSON structure - instead return plain text asking for more details.
 """
             # Get Gemini's response
-            response_text = get_gemini_response(gemini_prompt)
+            response_text = get_gemini_response(gemini_prompt, user_message)
             
-            # Extract JSON from response
+            # Check if the response is a clarification request rather than JSON
+            if not response_text.startswith('{') and not response_text.startswith('[') and '```json' not in response_text:
+                # This is a text response asking for clarification, not JSON
+                next_prompt = response_text
+                logger.info(f"Received clarification request from Gemini: {response_text}")
+                
+                # Return early without updating the journey
+                return jsonify({
+                    "journey_json": current_journey,
+                    "next_prompt": next_prompt,
+                    "final": False,
+                    "needs_trigger_selection": any("trigger_component_id" not in nav for nav in current_journey.get("navigation", []))
+                })
+            
+            # Process JSON response
             try:
                 # Clean the response if it contains markdown code blocks
                 if "```json" in response_text:
@@ -694,243 +421,42 @@ Return ONLY the JSON with no explanations or additional text.
                 elif "```" in response_text:
                     response_text = response_text.split("```")[1].split("```")[0].strip()
                 
+                # Parse JSON
                 journey_json = json.loads(response_text)
                 
-                # Ensure no_screens matches the actual number of screens
-                if "screens" in journey_json:
-                    journey_json["no_screens"] = len(journey_json["screens"])
-                
-                # Check if new screens have been added or updated
-                current_screens = current_journey.get("screens", [])
-                new_screens = journey_json.get("screens", [])
-                
-                # Process each screen to ensure proper structure
-                for screen in new_screens:
-                    # Ensure required screen fields exist
-                    if "screen_id" not in screen:
-                        screen["screen_id"] = len(new_screens)  # Assign default ID
-                    if "screen_name" not in screen:
-                        screen["screen_name"] = f"Screen{screen['screen_id']}"
+                # Process screens and components
+                for screen in journey_json.get("screens", []):
+                    # Ensure required screen fields
                     if "template" not in screen:
                         screen["template"] = "defaultTemplate"
                     if "style" not in screen:
                         screen["style"] = "defaultScreenStyle"
-                    if "screen_components" not in screen:
-                        screen["screen_components"] = []
                     
-                    # Check if this is a new screen or an existing one
-                    existing_screen = next((s for s in current_screens if s.get("screen_id") == screen.get("screen_id")), None)
-                    
-                    # Process each screen component in this screen
-                    if "screen_components" in screen:
-                        # Handle case where screen_components is not a list
-                        if not isinstance(screen["screen_components"], list):
-                            if isinstance(screen["screen_components"], dict):
-                                screen["screen_components"] = [screen["screen_components"]]
-                            else:
-                                screen["screen_components"] = []
+                    # Process screen components
+                    for sc in screen.get("screen_components", []):
+                        if "screen_component_style" not in sc:
+                            sc["screen_component_style"] = "defaultScreenComponentStyle"
                         
-                        for i, screen_component in enumerate(screen["screen_components"]):
-                            # Ensure screen_component is properly structured
-                            if isinstance(screen_component, dict):
-                                # Handle different field naming cases
-                                if "id" in screen_component and "screen_component_id" not in screen_component:
-                                    screen_component["screen_component_id"] = screen_component.pop("id")
-                                if "name" in screen_component and "screen_component_name" not in screen_component:
-                                    screen_component["screen_component_name"] = screen_component.pop("name")
-                                
-                                # Ensure all required fields exist
-                                if "screen_component_id" not in screen_component:
-                                    # Find from available components
-                                    if "screen_component_name" in screen_component:
-                                        component_name = screen_component["screen_component_name"]
-                                        matching = next((c for c in session_data["screen_components"] 
-                                                      if c.get("screen_component_name") == component_name), None)
-                                        if matching:
-                                            screen_component["screen_component_id"] = matching.get("screen_component_id")
-                                        else:
-                                            screen_component["screen_component_id"] = i + 1
-                                    else:
-                                        screen_component["screen_component_id"] = i + 1
-                                
-                                if "screen_component_name" not in screen_component:
-                                    # Find from available components
-                                    if "screen_component_id" in screen_component:
-                                        component_id = screen_component["screen_component_id"]
-                                        matching = next((c for c in session_data["screen_components"] 
-                                                      if c.get("screen_component_id") == component_id), None)
-                                        if matching:
-                                            screen_component["screen_component_name"] = matching.get("screen_component_name")
-                                        else:
-                                            screen_component["screen_component_name"] = f"Component{i+1}"
-                                    else:
-                                        screen_component["screen_component_name"] = f"Component{i+1}"
-                                
-                                if "screen_component_style" not in screen_component:
-                                    screen_component["screen_component_style"] = "defaultScreenComponentStyle"
-                                
-                                if "field_components" not in screen_component:
-                                    screen_component["field_components"] = []
-                                elif not isinstance(screen_component["field_components"], list):
-                                    screen_component["field_components"] = []
-                            
-                            # Check if this is a new screen component or doesn't have field_components
-                            is_new_component = True
-                            if existing_screen and "screen_components" in existing_screen:
-                                for existing_component in existing_screen.get("screen_components", []):
-                                    if existing_component.get("screen_component_id") == screen_component.get("screen_component_id"):
-                                        is_new_component = False
-                                        # Copy field_components if they exist in the existing component
-                                        if "field_components" in existing_component and existing_component["field_components"]:
-                                            screen_component["field_components"] = existing_component["field_components"]
-                                        break
-                            
-                            # If this is a new component or doesn't have field_components, fetch them
-                            if is_new_component or not screen_component.get("field_components"):
-                                component_name = screen_component.get("screen_component_name")
-                                if component_name:
-                                    # Fetch field components
-                                    logger.info(f"Fetching field components for {component_name}")
-                                    field_components = fetch_field_components(component_name)
-                                    screen_component["field_components"] = field_components
+                        # Fetch field components if needed
+                        component_name = sc.get("screen_component_name")
+                        if not sc.get("field_components") and component_name:
+                            sc["field_components"] = fetch_field_components(component_name)
                 
-                # Process navigation to ensure proper structure and look for missing trigger components
-                has_multiple_triggers = False
-                no_triggers_found = False
-                trigger_options = {}
+                # Process navigation
+                for nav in journey_json.get("navigation", []):
+                    if "navigation_type" not in nav:
+                        nav["navigation_type"] = "button_click"
                 
-                if "navigation" in journey_json:
-                    # Handle case where navigation is not a list
-                    if not isinstance(journey_json["navigation"], list):
-                        if isinstance(journey_json["navigation"], dict):
-                            journey_json["navigation"] = [journey_json["navigation"]]
-                        else:
-                            journey_json["navigation"] = []
-                    
-                    for nav in journey_json["navigation"]:
-                        # Fix navigation field names if needed
-                        if "from_screen_id" in nav and "source_screen_id" not in nav:
-                            nav["source_screen_id"] = nav.pop("from_screen_id")
-                        if "to_screen_id" in nav and "target_screen_id" not in nav:
-                            nav["target_screen_id"] = nav.pop("to_screen_id")
-                        
-                        # Ensure all required fields exist
-                        if "navigation_type" not in nav:
-                            nav["navigation_type"] = "button_click"
-                        
-                        # Check if target screen exists
-                        if "target_screen_id" in nav:
-                            target_id = nav["target_screen_id"]
-                            target_exists = any(s.get("screen_id") == target_id for s in journey_json.get("screens", []))
-                            
-                            if not target_exists:
-                                # Remove invalid navigation link
-                                logger.warning(f"Removing navigation to non-existent screen ID {target_id}")
-                                navigation = journey_json.get("navigation", [])
-                                if nav in navigation:
-                                    navigation.remove(nav)
-                                journey_json["navigation"] = navigation
-                                continue
-                        
-                        # Check if trigger_component_id is missing
-                        if "trigger_component_id" not in nav and "source_screen_id" in nav:
-                            source_screen_id = nav.get("source_screen_id")
-                            
-                            # Find the source screen
-                            source_screen = next((s for s in journey_json.get("screens", []) 
-                                                if s.get("screen_id") == source_screen_id), None)
-                            
-                            if source_screen and "screen_components" in source_screen:
-                                # Find all trigger components in this screen
-                                trigger_components = []
-                                
-                                for sc in source_screen.get("screen_components", []):
-                                    for fc in sc.get("field_components", []):
-                                        if fc.get("isTriggerComponent") == True:
-                                            trigger_components.append({
-                                                "id": fc.get("fieldComponentId"),
-                                                "name": fc.get("fieldName"),
-                                                "label": fc.get("fieldLabel")
-                                            })
-                                
-                                if len(trigger_components) == 1:
-                                    # If only one trigger component, use it
-                                    nav["trigger_component_id"] = trigger_components[0]["id"]
-                                elif len(trigger_components) > 1:
-                                    # If multiple trigger components, flag for user selection
-                                    has_multiple_triggers = True
-                                    trigger_options[str(source_screen_id)] = trigger_components
-                                else:
-                                    # No trigger components found
-                                    no_triggers_found = True
-                                    logger.warning(f"No trigger components found for screen {source_screen_id}")
-                else:
-                    journey_json["navigation"] = []
+                # Update session data with processed journey
+                session_data["journey"] = journey_json
                 
-                # Ensure no_screens is correct
-                if "screens" in journey_json:
-                    journey_json["no_screens"] = len(journey_json["screens"])
-                else:
-                    journey_json["screens"] = []
-                    journey_json["no_screens"] = 0
-                
-                # Handle case where multiple trigger components exist
-                multiple_triggers_message = ""
-                if has_multiple_triggers:
-                    # Format message about trigger options
-                    multiple_triggers_message = "I found multiple possible trigger components for navigation:\n\n"
-                    
-                    for screen_id, triggers in trigger_options.items():
-                        screen_name = next((s.get("screen_name", f"Screen {screen_id}") 
-                                           for s in journey_json.get("screens", []) 
-                                           if s.get("screen_id") == int(screen_id)), f"Screen {screen_id}")
-                        
-                        multiple_triggers_message += f"For {screen_name} (ID: {screen_id}), please choose one of these trigger components:\n"
-                        for trigger in triggers:
-                            multiple_triggers_message += f"  - {trigger['label']} (ID: {trigger['id']})\n"
-                    
-                    multiple_triggers_message += "\nPlease specify which trigger component to use by typing something like 'Use trigger ID 10 for screen 1' or 'For screen CustomerDetails use trigger ID 13'."
-                
-                # Handle case where no trigger components found
-                no_triggers_message = ""
-                if no_triggers_found:
-                    no_triggers_message = "\n\nI notice some of your screens don't have trigger components for navigation. The following components have 'isTriggerComponent' set to true and can be used for navigation:\n\n"
-                    
-                    # Find all available trigger components
-                    available_triggers = []
-                    for screen in journey_json.get("screens", []):
-                        screen_id = screen.get("screen_id")
-                        screen_name = screen.get("screen_name", f"Screen {screen_id}")
-                        
-                        for sc in screen.get("screen_components", []):
-                            for fc in sc.get("field_components", []):
-                                if fc.get("fieldType") == "button":
-                                    trigger_status = "is a trigger" if fc.get("isTriggerComponent") == True else "is NOT currently a trigger"
-                                    available_triggers.append({
-                                        "screen_id": screen_id,
-                                        "screen_name": screen_name,
-                                        "component_id": fc.get("fieldComponentId"),
-                                        "component_name": fc.get("fieldName"),
-                                        "component_label": fc.get("fieldLabel"),
-                                        "is_trigger": fc.get("isTriggerComponent") == True
-                                    })
-                    
-                    if available_triggers:
-                        for trigger in available_triggers:
-                            status = "✓ Is a trigger component" if trigger["is_trigger"] else "× Not a trigger component"
-                            no_triggers_message += f"  - {trigger['component_label']} (ID: {trigger['component_id']}) on {trigger['screen_name']} - {status}\n"
-                        
-                        no_triggers_message += "\nPlease choose appropriate trigger components for your navigation. You can only create navigation links between existing screens."
-                    else:
-                        no_triggers_message += "I couldn't find any button components that could serve as triggers. Please add button components to your screens first."
-                
-                # Check if the journey is complete or what's missing
+                # Check for journey validation issues
                 journey_status = validate_journey(journey_json, full_check=False)
                 journey_status_message = ""
                 if not journey_status["valid"]:
                     journey_status_message = f"\n\nTo complete your journey, you need to: {journey_status['message']}"
                 
-                # Generate next prompt for user
+                # Generate next prompt for user guidance
                 next_prompt_prompt = f"""
 Based on the current journey JSON and the user's last message, generate a friendly, non-technical prompt 
 to guide the user to the next step in creating their journey. 
@@ -938,43 +464,19 @@ to guide the user to the next step in creating their journey.
 Current journey: {json.dumps(journey_json, indent=2)}
 User's last message: {user_message}
 
-Multiple trigger components flag: {has_multiple_triggers}
-Trigger component message: {multiple_triggers_message}
-No triggers found flag: {no_triggers_found}
-No triggers message: {no_triggers_message}
-Journey status message: {journey_status_message}
-
-VERY IMPORTANT: You must ONLY offer the user choices from the available screen components in the list below.
-Do NOT suggest or imply that they can add any components not in this list (like generic text, images, buttons, etc.).
-Instead, present the exact screen component options available and ask them to choose from these specific options.
-
-ALSO IMPORTANT: Do NOT allow navigation to screens that don't exist. Only allow navigation between screens
-that have already been created. Politely refuse any attempts to create navigation to unknown screens.
-
-Available screen components (ONLY THESE can be used):
-{screen_components_info}
-
 Generate a helpful prompt that:
 1. Summarizes what has been done so far
 2. Lists the EXACT available screen components by name and asks the user to choose from ONLY these options
-3. If there are multiple trigger components that need user selection, include the formatted message about choosing trigger components
-4. If there are no trigger components found on a screen that needs one, include the no_triggers_message
-5. If there are journey completion requirements, include the message about what's needed to complete the journey
-6. Explains how to confirm, change or cancel
+3. If there are journey completion requirements, include the message about what's needed to complete the journey
+4. Explains how to confirm, change or cancel
+5. If the user request is ambiguous (like "add 3 screens" without specifying what screens), add empty but structured screens objects with empty values and direct the user to put in values for each field politely.
+
 
 IMPORTANT: DO NOT mention any components or options not in the available screen components list.
 If the user tries to navigate to a non-existent screen, politely explain that they can only create navigation 
 between screens that already exist in the journey.
 """
                 next_prompt = get_gemini_response(next_prompt_prompt)
-                
-                # If multiple triggers were found, append the trigger selection message
-                if has_multiple_triggers and multiple_triggers_message not in next_prompt:
-                    next_prompt = f"{next_prompt}\n\n{multiple_triggers_message}"
-                
-                # If no triggers were found, append the message
-                if no_triggers_found and no_triggers_message not in next_prompt:
-                    next_prompt = f"{next_prompt}\n\n{no_triggers_message}"
                 
                 # Add journey status message if not already included
                 if journey_status_message and journey_status_message not in next_prompt:
@@ -983,6 +485,7 @@ between screens that already exist in the journey.
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse JSON from Gemini response: {response_text}")
                 next_prompt = "I'm having trouble understanding that. Could you please clarify your requirements for the journey?"
+                # Do not update journey on error
         
         except Exception as e:
             logger.error(f"Error processing with Gemini: {str(e)}")
@@ -995,6 +498,13 @@ between screens that already exist in the journey.
         "final": is_final,
         "needs_trigger_selection": any("trigger_component_id" not in nav for nav in session_data["journey"].get("navigation", []))
     })
+
+# API endpoint to get field components (simplified)
+@app.route('/journey/api/field-components/<screen_component_name>', methods=['GET'])
+def get_field_components(screen_component_name):
+    """API endpoint to get field components for a specific screen component"""
+    field_components = fetch_field_components(screen_component_name)
+    return jsonify(field_components)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
