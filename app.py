@@ -259,15 +259,27 @@ def process_message():
     
     # Check for confirmation or cancellation commands
     is_final = False
-    if user_message.lower() == 'confirm':
+    user_msg_lower = user_message.lower().strip()
+    
+    # Command synonyms
+    confirm_commands = ['confirm', 'yes', 'ok', 'finished', 'done', 'complete', 'save', 'submit']
+    cancel_commands = ['cancel', 'reset', 'restart', 'start over', 'clear', 'begin again']
+    quit_commands = ['quit', 'exit', 'close', 'end', 'terminate', 'goodbye', 'bye']
+    
+    if any(user_msg_lower == cmd for cmd in confirm_commands):
         # Validate the journey before confirming
         validation_result = validate_journey(current_journey)
         if validation_result["valid"]:
             is_final = True
             next_prompt = "Your journey has been confirmed and saved. Thank you!"
+            # Clean up the session after successful confirmation
+            if session_id in sessions:
+                del sessions[session_id]
+                logger.info(f"Session {session_id} cleared after confirmation")
         else:
             next_prompt = f"Your journey cannot be confirmed yet. {validation_result['message']}"
-    elif user_message.lower() == 'cancel':
+    
+    elif any(user_msg_lower == cmd for cmd in cancel_commands):
         # Reset journey
         session_data["journey"] = {
             "journey_name": "",
@@ -277,6 +289,15 @@ def process_message():
             "navigation": []
         }
         next_prompt = "Journey creation has been cancelled. Let's start again. What would you like to name this journey?"
+    
+    elif any(user_msg_lower == cmd for cmd in quit_commands):
+        # Clean up the session when user quits
+        if session_id in sessions:
+            del sessions[session_id]
+            logger.info(f"Session {session_id} cleared after quit command")
+        next_prompt = "Your journey session has been closed. Thank you for using our service."
+        is_final = True
+        
     else:
         # Check if user message is too ambiguous
         if is_ambiguous_input(user_message):
