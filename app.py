@@ -432,19 +432,34 @@ Your task is to generate JSON based on user requirements, following these rules:
    - style: Use "defaultScreenStyle"
    - screen_components: Array of components in this screen
 
-4. You CANNOT create new screen_components or field_components. You must use existing ones from the provided lists.
+4. Each screen_component object MUST contain all of these fields:
+   - screen_component_id: Numeric ID 
+   - screen_component_name: Name of the component
+   - screen_component_style: Use "defaultScreenComponentStyle"
+   - field_components: Array (can be empty, will be filled automatically)
 
-5. When the user wants to add a new screen, you must:
+5. Each navigation object MUST contain all of these fields:
+   - source_screen_id: ID of the starting screen
+   - target_screen_id: ID of the destination screen
+   - trigger_component_id: ID of the field component that triggers navigation
+   - navigation_type: Use "button_click"
+
+6. For trigger_component_id in navigation: 
+   - Use the fieldComponentId of a component in the source screen where "isTriggerComponent": true
+   - If multiple trigger components exist, ask the user to choose
+   - If no trigger component exists, create navigation but ask the user to add one
+
+7. You CANNOT create new screen_components or field_components. You must use existing ones from the provided lists.
+
+8. When the user wants to add a new screen, you must:
    - Select an appropriate screen_component from the available list
    - For field_components, the system will automatically fetch them - just include an empty field_components array
 
-6. If the user requests a specific screen component by name or function, choose the most appropriate one from the available options. If the user's request is ambiguous, select the most relevant screen component.
+9. If the user requests a specific screen component by name or function, choose the most appropriate one from the available options. If the user's request is ambiguous, select the most relevant screen component.
 
-7. Be polite when asking for missing information. If the user doesn't specify something important, ask for it specifically.
+10. Be polite when asking for missing information. If the user doesn't specify something important, ask for it specifically.
 
-8. Keep track of the current state of the journey as the conversation progresses.
-
-9. When building navigation, make sure to connect screens in a logical order and include the appropriate trigger component IDs.
+11. Keep track of the current state of the journey as the conversation progresses.
 
 Available screen components: 
 {screen_components_info}
@@ -481,11 +496,39 @@ Return ONLY the JSON with no explanations or additional text.
                     
                     # Process screen components for this screen
                     for screen_component in screen.get("screen_components", []):
+                        # Ensure all required fields are present in screen_component
+                        if "screen_component_id" not in screen_component:
+                            # If missing, try to find from available components by name
+                            component_name = screen_component.get("screen_component_name")
+                            matching_component = next((c for c in session_data["screen_components"] 
+                                                    if c.get("screen_component_name") == component_name), None)
+                            if matching_component:
+                                screen_component["screen_component_id"] = matching_component.get("screen_component_id")
+                            else:
+                                # Assign a default ID if not found
+                                screen_component["screen_component_id"] = 999
+                        
+                        # Ensure screen_component_name is present
+                        if "screen_component_name" not in screen_component:
+                            # Try to find from available components by ID
+                            component_id = screen_component.get("screen_component_id")
+                            matching_component = next((c for c in session_data["screen_components"] 
+                                                    if c.get("screen_component_id") == component_id), None)
+                            if matching_component:
+                                screen_component["screen_component_name"] = matching_component.get("screen_component_name")
+                            else:
+                                # Assign a default name if not found
+                                screen_component["screen_component_name"] = "DefaultComponent"
+                        
+                        # Ensure screen_component_style is present
+                        if "screen_component_style" not in screen_component:
+                            screen_component["screen_component_style"] = "defaultScreenComponentStyle"
+                        
                         # If this is a new screen component or has no field components yet, fetch them
                         if not existing_screen or not any(
                             sc.get("screen_component_id") == screen_component.get("screen_component_id") 
                             for sc in existing_screen.get("screen_components", [])
-                        ) or "field_components" not in screen_component:
+                        ) or "field_components" not in screen_component or not screen_component["field_components"]:
                             # Get the component name
                             component_name = screen_component.get("screen_component_name")
                             if component_name:
@@ -493,6 +536,38 @@ Return ONLY the JSON with no explanations or additional text.
                                 logger.info(f"Fetching field components for {component_name}")
                                 field_components = fetch_field_components(component_name)
                                 screen_component["field_components"] = field_components
+                
+                # Process navigation to ensure all required fields are present
+                for navigation in journey_json.get("navigation", []):
+                    # Ensure all required fields are present
+                    if "navigation_type" not in navigation:
+                        navigation["navigation_type"] = "button_click"
+                    
+                    # Check if trigger_component_id is missing
+                    if "trigger_component_id" not in navigation:
+                        source_screen_id = navigation.get("source_screen_id")
+                        source_screen = next((s for s in journey_json.get("screens", []) 
+                                            if s.get("screen_id") == source_screen_id), None)
+                        
+                        if source_screen:
+                            # Find trigger components in the source screen
+                            trigger_components = []
+                            for sc in source_screen.get("screen_components", []):
+                                for fc in sc.get("field_components", []):
+                                    if fc.get("isTriggerComponent") == True:
+                                        trigger_components.append(fc)
+                            
+                            if len(trigger_components) == 1:
+                                # If only one trigger component, use it
+                                navigation["trigger_component_id"] = trigger_components[0].get("fieldComponentId")
+                            elif len(trigger_components) > 1:
+                                # If multiple, use the first one but log a warning
+                                navigation["trigger_component_id"] = trigger_components[0].get("fieldComponentId")
+                                logger.warning(f"Multiple trigger components found for screen {source_screen_id}. Using first one.")
+                            else:
+                                # If none, assign a default
+                                logger.warning(f"No trigger component found for screen {source_screen_id}. Using default.")
+                                navigation["trigger_component_id"] = 999
                 
                 # Update the session's journey data
                 session_data["journey"] = journey_json
@@ -509,8 +584,8 @@ User's last message: {user_message}
 
 Generate a helpful prompt that:
 1. Summarizes what has been done so far
-2. Asks for specific information needed next
-3. Provides options for the user (if applicable)
+2. Asks for specific information needed next (only required fields)
+3. Does not contain any suggestion for creating any field component or screen component
 4. Explains how to confirm, change or cancel
 """
                 next_prompt = get_gemini_response(next_prompt_prompt)
@@ -531,4 +606,4 @@ Generate a helpful prompt that:
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5000)
