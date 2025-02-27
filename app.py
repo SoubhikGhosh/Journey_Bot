@@ -5,7 +5,6 @@ import uuid
 import logging
 import json
 from datetime import datetime
-import time
 
 # Configure logging
 logging.basicConfig(
@@ -32,6 +31,15 @@ model = genai.GenerativeModel(
     generation_config={"temperature": 0.7, "top_p": 0.95, "top_k": 40}
 )
 
+# Function to get response from Gemini
+def get_gemini_response(prompt_text):
+    try:
+        response = model.generate_content(prompt_text)
+        return response.text
+    except Exception as e:
+        logger.error(f"Gemini API error: {str(e)}")
+        return '{}'
+
 # Session storage
 sessions = {}
 
@@ -44,8 +52,8 @@ MOCK_SCREEN_COMPONENTS = [
     {"screen_component_id": 5, "screen_component_name": "status"}
 ]
 
-# Mock data for field components
-MOCK_FIELD_COMPONENTS = {
+# Sample field components response - used for mocking only
+SAMPLE_FIELD_COMPONENTS = {
     "CustomerDetails": [
         {
             "fieldComponentId": 1,
@@ -79,66 +87,6 @@ MOCK_FIELD_COMPONENTS = {
             "updatedAt": "2025-02-24T09:55:40.568178",
             "style": "defaultFieldStyle"
         }
-    ],
-    "pan": [
-        {
-            "fieldComponentId": 11,
-            "fieldType": "largetext",
-            "fieldName": "panDetailsHeading",
-            "fieldLabel": "Enter PAN Details",
-            "validations": {},
-            "dataSource": None,
-            "dependencies": None,
-            "isTriggerComponent": False,
-            "createdAt": "2025-02-23T12:16:29.365502",
-            "updatedAt": "2025-02-23T12:16:29.352896",
-            "style": "defaultFieldStyle"
-        }
-    ],
-    "aadhar": [
-        {
-            "fieldComponentId": 14,
-            "fieldType": "largetext",
-            "fieldName": "aadharHeadingDetails",
-            "fieldLabel": "Enter Aadhar Details",
-            "validations": {},
-            "dataSource": None,
-            "dependencies": None,
-            "isTriggerComponent": False,
-            "createdAt": "2025-02-23T12:27:20.931269",
-            "updatedAt": "2025-02-23T12:27:20.906399",
-            "style": "defaultFieldStyle"
-        }
-    ],
-    "otp": [
-        {
-            "fieldComponentId": 17,
-            "fieldType": "largetext",
-            "fieldName": "otpHeading",
-            "fieldLabel": "Enter OTP",
-            "validations": {},
-            "dataSource": None,
-            "dependencies": None,
-            "isTriggerComponent": False,
-            "createdAt": "2025-02-23T12:29:14.083147",
-            "updatedAt": "2025-02-23T12:29:14.071053",
-            "style": "defaultFieldStyle"
-        }
-    ],
-    "status": [
-        {
-            "fieldComponentId": 19,
-            "fieldType": "statustext",
-            "fieldName": "status",
-            "fieldLabel": "status",
-            "validations": {},
-            "dataSource": None,
-            "dependencies": None,
-            "isTriggerComponent": False,
-            "createdAt": "2025-02-23T23:24:15.569678",
-            "updatedAt": "2025-02-23T23:24:15.548801",
-            "style": "defaultFieldStyle"
-        }
     ]
 }
 
@@ -154,20 +102,319 @@ def fetch_screen_components():
     """
     return MOCK_SCREEN_COMPONENTS
 
-# Function to fetch field components for a screen component (mocked)
+# Function to fetch field components for a screen component
 def fetch_field_components(screen_component_name):
     """
-    Mock function to fetch field components for a screen component
+    Function to fetch field components for a screen component from secondary backend
     
-    # Actual API call would be:
-    # import requests
-    # response = requests.get(f"https://backend.example.com/api/field-components/{screen_component_name}")
-    # return response.json()
+    For now, we'll use a mock implementation, but in production:
+    import requests
+    response = requests.get(f"https://backend.example.com/api/field-components/{screen_component_name}")
+    return response.json()
     """
-    return MOCK_FIELD_COMPONENTS.get(screen_component_name, [])
+    logger.info(f"Fetching field components for: {screen_component_name}")
+    
+    # Mock response - this would be replaced with actual API call
+    if screen_component_name == "CustomerDetails":
+        # Return a more complete field components list from the document
+        return [
+            {
+                "fieldComponentId": 1,
+                "fieldType": "largetext",
+                "fieldName": "customerDetailsHeading",
+                "fieldLabel": "Enter Customer Details",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:06:37.958916",
+                "updatedAt": "2025-02-23T12:06:37.904855",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 28,
+                "fieldType": "text_field",
+                "fieldName": "firstname",
+                "fieldLabel": "First Name",
+                "validations": {
+                    "required": True,
+                    "requiredMessage": "First Name is required",
+                    "minLength": 3,
+                    "minLengthMessage": "Firstname must be at least 3 characters",
+                    "helperText": "Enter a Firstname between 3-20 characters"
+                },
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-24T09:55:40.602092",
+                "updatedAt": "2025-02-24T09:55:40.568178",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 2,
+                "fieldType": "text_field",
+                "fieldName": "lastname",
+                "fieldLabel": "Last Name",
+                "validations": {
+                    "required": True,
+                    "requiredMessage": "Last Name is required",
+                    "minLength": 3,
+                    "minLengthMessage": "Lastname must be at least 3 characters",
+                    "helperText": "Enter a Lastname between 3-20 characters"
+                },
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:07:33.156551",
+                "updatedAt": "2025-02-23T12:07:33.136884",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 10,
+                "fieldType": "button",
+                "fieldName": "customDtlBtn",
+                "fieldLabel": "Proceed >",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": True,
+                "createdAt": "2025-02-23T12:15:13.945457",
+                "updatedAt": "2025-02-23T12:15:13.930879",
+                "style": "defaultFieldStyle"
+            }
+        ]
+    elif screen_component_name == "pan":
+        return [
+            {
+                "fieldComponentId": 11,
+                "fieldType": "largetext",
+                "fieldName": "panDetailsHeading",
+                "fieldLabel": "Enter PAN Details",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:16:29.365502",
+                "updatedAt": "2025-02-23T12:16:29.352896",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 12,
+                "fieldType": "text_field",
+                "fieldName": "pan",
+                "fieldLabel": "PAN",
+                "validations": {
+                    "required": True,
+                    "pattern": "[A-Z]{5}[0-9]{4}[A-Z]",
+                    "patternError": "Please enter a valid PAN number"
+                },
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:18:15.277552",
+                "updatedAt": "2025-02-23T12:18:15.26131",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 13,
+                "fieldType": "button",
+                "fieldName": "validatePanBtn",
+                "fieldLabel": "Validate PAN",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": True,
+                "createdAt": "2025-02-23T12:19:33.008951",
+                "updatedAt": "2025-02-23T12:19:32.995502",
+                "style": "defaultFieldStyle"
+            }
+        ]
+    elif screen_component_name == "aadhar":
+        return [
+            {
+                "fieldComponentId": 14,
+                "fieldType": "largetext",
+                "fieldName": "aadharHeadingDetails",
+                "fieldLabel": "Enter Aadhar Details",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:27:20.931269",
+                "updatedAt": "2025-02-23T12:27:20.906399",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 15,
+                "fieldType": "text_field",
+                "fieldName": "aadhar",
+                "fieldLabel": "Aadhar Number",
+                "validations": {
+                    "required": True,
+                    "pattern": "[0-9]{12}",
+                    "patternError": "Please enter a valid Aadhar number"
+                },
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:28:06.266728",
+                "updatedAt": "2025-02-23T12:28:06.257313",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 16,
+                "fieldType": "button",
+                "fieldName": "validateAadhar",
+                "fieldLabel": "Validate Aadhar",
+                "validations": {},
+                "dataSource": "validateaadhar",
+                "dependencies": None,
+                "isTriggerComponent": True,
+                "createdAt": "2025-02-23T12:28:51.948309",
+                "updatedAt": "2025-02-23T12:28:51.923045",
+                "style": "defaultFieldStyle"
+            }
+        ]
+    elif screen_component_name == "otp":
+        return [
+            {
+                "fieldComponentId": 17,
+                "fieldType": "largetext",
+                "fieldName": "otpHeading",
+                "fieldLabel": "Enter OTP",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:29:14.083147",
+                "updatedAt": "2025-02-23T12:29:14.071053",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 18,
+                "fieldType": "otp",
+                "fieldName": "otp",
+                "fieldLabel": "OTP",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T12:29:30.918031",
+                "updatedAt": "2025-02-23T12:29:30.908255",
+                "style": "defaultFieldStyle"
+            }
+        ]
+    elif screen_component_name == "status":
+        return [
+            {
+                "fieldComponentId": 19,
+                "fieldType": "statustext",
+                "fieldName": "status",
+                "fieldLabel": "status",
+                "validations": {},
+                "dataSource": None,
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T23:24:15.569678",
+                "updatedAt": "2025-02-23T23:24:15.548801",
+                "style": "defaultFieldStyle"
+            },
+            {
+                "fieldComponentId": 20,
+                "fieldType": "button",
+                "fieldName": "homeScreenButton",
+                "fieldLabel": "Home Screen",
+                "validations": {},
+                "dataSource": "gotohomescreen",
+                "dependencies": None,
+                "isTriggerComponent": False,
+                "createdAt": "2025-02-23T23:25:36.440081",
+                "updatedAt": "2025-02-23T23:25:36.419469",
+                "style": "defaultFieldStyle"
+            }
+        ]
+    
+    # Default empty array for unknown components
+    return []
 
-# Initial prompt for Gemini
-SYSTEM_PROMPT = """
+@app.route('/journey/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
+
+@app.route('/journey/api/start', methods=['GET'])
+def start_session():
+    """Start a new session and initialize the journey creation process"""
+    # Generate a new session ID
+    session_id = str(uuid.uuid4())
+    
+    # Fetch available screen components
+    screen_components = fetch_screen_components()
+    
+    # Initialize session with screen components info
+    sessions[session_id] = {
+        "journey": {
+            "journey_name": "",
+            "journey_type": "single",
+            "no_screens": 0,
+            "screens": [],
+            "navigation": []
+        },
+        "screen_components": screen_components
+    }
+    
+    # Create welcome message
+    next_prompt = ("Hi! I'll help you create a journey for your banking application. "
+                  "What would you like to name this journey? "
+                  "Please tell me what type of journey you want to create (e.g., Savings Account Opening, Loan Application).")
+    
+    logger.info(f"Session started: {session_id}")
+    return jsonify({
+        "message": "session started",
+        "next_prompt": next_prompt,
+        "final": False,
+        "session_id": session_id
+    })
+
+@app.route('/journey/api/process', methods=['POST'])
+def process_message():
+    """Process user message and progress the journey creation"""
+    data = request.json
+    session_id = data.get('session_id')
+    user_message = data.get('message')
+    
+    if not session_id or not user_message or session_id not in sessions:
+        logger.error(f"Invalid request: session_id={session_id}")
+        return jsonify({"error": "Invalid session ID or message"}), 400
+    
+    session_data = sessions[session_id]
+    
+    # Check for confirmation or cancellation commands
+    is_final = False
+    if user_message.lower() == 'confirm':
+        is_final = True
+        next_prompt = "Your journey has been confirmed and saved. Thank you!"
+    elif user_message.lower() == 'cancel':
+        # Reset journey
+        session_data["journey"] = {
+            "journey_name": "",
+            "journey_type": "single",
+            "no_screens": 0,
+            "screens": [],
+            "navigation": []
+        }
+        next_prompt = "Journey creation has been cancelled. Let's start again. What would you like to name this journey?"
+    else:
+        # Process with Gemini
+        try:
+            # Format available screen components
+            screen_components_info = "\n".join([
+                f"- ID: {sc['screen_component_id']}, Name: {sc['screen_component_name']}" 
+                for sc in session_data["screen_components"]
+            ])
+            
+            # Create a message for Gemini that includes the current journey state
+            gemini_prompt = f"""
 You are an AI assistant that helps users create journey JSON configurations for a banking application. 
 Your task is to generate JSON based on user requirements, following these rules:
 
@@ -189,104 +436,19 @@ Your task is to generate JSON based on user requirements, following these rules:
 
 5. When the user wants to add a new screen, you must:
    - Select an appropriate screen_component from the available list
-   - Include the corresponding field_components for that screen_component
+   - For field_components, the system will automatically fetch them - just include an empty field_components array
 
-6. Be polite when asking for missing information. If the user doesn't specify something important, ask for it specifically.
+6. If the user requests a specific screen component by name or function, choose the most appropriate one from the available options. If the user's request is ambiguous, select the most relevant screen component.
 
-7. Keep track of the current state of the journey as the conversation progresses.
+7. Be polite when asking for missing information. If the user doesn't specify something important, ask for it specifically.
+
+8. Keep track of the current state of the journey as the conversation progresses.
+
+9. When building navigation, make sure to connect screens in a logical order and include the appropriate trigger component IDs.
 
 Available screen components: 
-{screen_components}
+{screen_components_info}
 
-Remember: Return ONLY the JSON object with no additional text or explanations.
-"""
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
-
-@app.route('/api/start', methods=['POST'])
-def start_session():
-    """Start a new session and initialize the journey creation process"""
-    # Generate a new session ID
-    session_id = str(uuid.uuid4())
-    
-    # Fetch available screen components
-    screen_components = fetch_screen_components()
-    
-    # Initialize session with screen components info
-    sessions[session_id] = {
-        "journey": {
-            "journey_name": "",
-            "journey_type": "single",
-            "no_screens": 0,
-            "screens": [],
-            "navigation": []
-        },
-        "messages": [],
-        "screen_components": screen_components
-    }
-    
-    # Format screen components for prompt
-    screen_components_info = "\n".join([
-        f"- ID: {sc['screen_component_id']}, Name: {sc['screen_component_name']}" 
-        for sc in screen_components
-    ])
-    
-    # Add system prompt to messages
-    system_prompt = SYSTEM_PROMPT.format(screen_components=screen_components_info)
-    sessions[session_id]["messages"].append({"role": "system", "content": system_prompt})
-    
-    # Create welcome message
-    next_prompt = ("Hi! I'll help you create a journey for your banking application. "
-                  "What would you like to name this journey? "
-                  "Please tell me what type of journey you want to create (e.g., Savings Account Opening, Loan Application).")
-    
-    logger.info(f"Session started: {session_id}")
-    return jsonify({
-        "message": "session started",
-        "next_prompt": next_prompt,
-        "final": False,
-        "session_id": session_id
-    })
-
-@app.route('/api/process', methods=['POST'])
-def process_message():
-    """Process user message and progress the journey creation"""
-    data = request.json
-    session_id = data.get('session_id')
-    user_message = data.get('message')
-    
-    if not session_id or not user_message or session_id not in sessions:
-        logger.error(f"Invalid request: session_id={session_id}")
-        return jsonify({"error": "Invalid session ID or message"}), 400
-    
-    session_data = sessions[session_id]
-    
-    # Add user message to conversation history
-    session_data["messages"].append({"role": "user", "content": user_message})
-    
-    # Check for confirmation or cancellation commands
-    is_final = False
-    if user_message.lower() == 'confirm':
-        is_final = True
-        next_prompt = "Your journey has been confirmed and saved. Thank you!"
-    elif user_message.lower() == 'cancel':
-        # Reset journey
-        session_data["journey"] = {
-            "journey_name": "",
-            "journey_type": "single",
-            "no_screens": 0,
-            "screens": [],
-            "navigation": []
-        }
-        next_prompt = "Journey creation has been cancelled. Let's start again. What would you like to name this journey?"
-    else:
-        # Process with Gemini
-        try:
-            # Create a message for Gemini that includes the current journey state
-            gemini_prompt = f"""
 Current journey state:
 {json.dumps(session_data['journey'], indent=2)}
 
@@ -295,15 +457,11 @@ User message: {user_message}
 Create or update the journey JSON based on the user's message. 
 Return ONLY the JSON with no explanations or additional text.
 """
-            session_data["messages"].append({"role": "user", "content": gemini_prompt})
-            
             # Get Gemini's response
-            gemini_messages = [msg for msg in session_data["messages"]]
-            response = model.generate_content(gemini_messages)
+            response_text = get_gemini_response(gemini_prompt)
             
             # Extract JSON from response
             try:
-                response_text = response.text
                 # Clean the response if it contains markdown code blocks
                 if "```json" in response_text:
                     response_text = response_text.split("```json")[1].split("```")[0].strip()
@@ -311,6 +469,30 @@ Return ONLY the JSON with no explanations or additional text.
                     response_text = response_text.split("```")[1].split("```")[0].strip()
                 
                 journey_json = json.loads(response_text)
+                
+                # Check if new screens have been added or updated that need field components
+                current_screens = session_data["journey"].get("screens", [])
+                new_screens = journey_json.get("screens", [])
+                
+                # Process each screen to see if we need to fetch field components
+                for screen in new_screens:
+                    # Find if this screen already exists in the current journey
+                    existing_screen = next((s for s in current_screens if s.get("screen_id") == screen.get("screen_id")), None)
+                    
+                    # Process screen components for this screen
+                    for screen_component in screen.get("screen_components", []):
+                        # If this is a new screen component or has no field components yet, fetch them
+                        if not existing_screen or not any(
+                            sc.get("screen_component_id") == screen_component.get("screen_component_id") 
+                            for sc in existing_screen.get("screen_components", [])
+                        ) or "field_components" not in screen_component:
+                            # Get the component name
+                            component_name = screen_component.get("screen_component_name")
+                            if component_name:
+                                # Fetch field components from API
+                                logger.info(f"Fetching field components for {component_name}")
+                                field_components = fetch_field_components(component_name)
+                                screen_component["field_components"] = field_components
                 
                 # Update the session's journey data
                 session_data["journey"] = journey_json
@@ -331,20 +513,15 @@ Generate a helpful prompt that:
 3. Provides options for the user (if applicable)
 4. Explains how to confirm, change or cancel
 """
-                prompt_response = model.generate_content(next_prompt_prompt)
-                next_prompt = prompt_response.text.strip()
+                next_prompt = get_gemini_response(next_prompt_prompt)
                 
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse JSON from Gemini response: {response.text}")
+                logger.error(f"Failed to parse JSON from Gemini response: {response_text}")
                 next_prompt = "I'm having trouble understanding that. Could you please clarify your requirements for the journey?"
         
         except Exception as e:
             logger.error(f"Error processing with Gemini: {str(e)}")
             next_prompt = "Sorry, I encountered an error processing your request. Please try again."
-    
-    # Add response to message history (if not confirmation/cancellation)
-    if not is_final and user_message.lower() != 'cancel':
-        session_data["messages"].append({"role": "assistant", "content": json.dumps(session_data["journey"])})
     
     logger.info(f"Processed message for session {session_id}, is_final={is_final}")
     return jsonify({
