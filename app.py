@@ -87,7 +87,7 @@ def fetch_all_components():
                     "validations": {},
                     "dataSource": "get_countries",
                     "dependencies": None,
-                    "isTriggerComponent": False,
+                    "isTriggerComponent": True,
                     "themeStyle": {
                         "styleId": 2,
                         "styleName": "defaultFieldStyle",
@@ -115,6 +115,22 @@ def fetch_all_components():
                     },
                     "createdAt": "2025-02-26T15:40:43.556707",
                     "updatedAt": "2025-02-26T15:40:43.524369"
+                },
+                {
+                    "fieldComponentId": 2,
+                    "fieldType": "button",
+                    "fieldName": "aadharSubmitBtn",
+                    "fieldLabel": "Submit Aadhar",
+                    "validations": {},
+                    "dataSource": None,
+                    "dependencies": None,
+                    "isTriggerComponent": True,
+                    "themeStyle": {
+                        "styleId": 2,
+                        "styleName": "defaultFieldStyle"
+                    },
+                    "createdAt": "2025-02-26T15:40:43.556707",
+                    "updatedAt": "2025-02-26T15:40:43.524369"
                 }
             ],
             "createdAt": "2025-02-26T15:40:50.960744",
@@ -126,7 +142,7 @@ def fetch_all_components():
             "style": "defaultScreenComponentStyle",
             "fieldComponents": [
                 {
-                    "fieldComponentId": 1,
+                    "fieldComponentId": 3,
                     "fieldType": "drop_down",
                     "fieldName": "country",
                     "fieldLabel": "Country",
@@ -158,6 +174,38 @@ def fetch_all_components():
                             "createdAt": None,
                             "updatedAt": None
                         }
+                    },
+                    "createdAt": "2025-02-26T15:40:43.556707",
+                    "updatedAt": "2025-02-26T15:40:43.524369"
+                },
+                {
+                    "fieldComponentId": 4,
+                    "fieldType": "button",
+                    "fieldName": "panSubmitBtn",
+                    "fieldLabel": "Submit PAN",
+                    "validations": {},
+                    "dataSource": None,
+                    "dependencies": None,
+                    "isTriggerComponent": True,
+                    "themeStyle": {
+                        "styleId": 2,
+                        "styleName": "defaultFieldStyle"
+                    },
+                    "createdAt": "2025-02-26T15:40:43.556707",
+                    "updatedAt": "2025-02-26T15:40:43.524369"
+                },
+                {
+                    "fieldComponentId": 5,
+                    "fieldType": "button",
+                    "fieldName": "verifyPanBtn", 
+                    "fieldLabel": "Verify PAN",
+                    "validations": {},
+                    "dataSource": None,
+                    "dependencies": None,
+                    "isTriggerComponent": True,
+                    "themeStyle": {
+                        "styleId": 2,
+                        "styleName": "defaultFieldStyle"
                     },
                     "createdAt": "2025-02-26T15:40:43.556707",
                     "updatedAt": "2025-02-26T15:40:43.524369"
@@ -200,6 +248,25 @@ def extract_trigger_selection(message, screen_names):
                         selections[screen_name] = int(trigger_id)
     
     return selections
+
+# Function to find valid trigger components in a screen
+def find_trigger_components(screen):
+    """Find all valid trigger components (isTriggerComponent=True) in a screen"""
+    trigger_components = []
+    if not screen:
+        return trigger_components
+        
+    for sc in screen.get("screen_components", []):
+        for fc in sc.get("field_components", []):
+            if fc.get("isTriggerComponent") is True:
+                trigger_components.append({
+                    "id": fc.get("fieldComponentId"),
+                    "name": fc.get("fieldName", "Unknown"),
+                    "label": fc.get("fieldLabel", ""),
+                    "type": fc.get("fieldType", "Unknown")
+                })
+    
+    return trigger_components
 
 # Function to validate the journey
 def validate_journey(journey, full_check=True):
@@ -323,6 +390,11 @@ def process_message():
     current_journey = session_data["journey"]
     all_components = session_data["all_components"]
     
+    # Track special cases for UI feedback
+    navigation_added = False
+    auto_selected_trigger = None
+    no_triggers_found = False
+    
     # Check for confirmation or cancellation commands
     is_final = False
     user_msg_lower = user_message.lower().strip()
@@ -382,13 +454,24 @@ def process_message():
         screen_names_map = {screen["screen_name"].lower(): screen["screen_id"] for screen in current_journey.get("screens", []) if "screen_name" in screen}
         trigger_selections = extract_trigger_selection(user_message, screen_names_map)
         
-        # Apply trigger selections to navigation
+        # Apply trigger selections to navigation - but only apply to valid trigger components
         if trigger_selections:
             for nav in current_journey.get("navigation", []):
                 if "source_screen_id" in nav and "trigger_component_id" not in nav:
                     source_id = nav["source_screen_id"]
                     if source_id in trigger_selections:
-                        nav["trigger_component_id"] = trigger_selections[source_id]
+                        # Verify the selected trigger ID actually exists and is a trigger component
+                        selected_id = trigger_selections[source_id]
+                        source_screen = next((s for s in current_journey.get("screens", []) if s.get("screen_id") == source_id), None)
+                        if source_screen:
+                            # Find if the selected ID is a valid trigger component
+                            is_valid_trigger = False
+                            for sc in source_screen.get("screen_components", []):
+                                for fc in sc.get("field_components", []):
+                                    if fc.get("fieldComponentId") == selected_id and fc.get("isTriggerComponent") is True:
+                                        is_valid_trigger = True
+                                        nav["trigger_component_id"] = selected_id
+                                        break
         
         # Process with Gemini
         try:
@@ -399,7 +482,6 @@ def process_message():
                 r"(?:create|add|make)\s+(?:a\s+)?(?:navigation|link|connection)\s+(?:from\s+)?(?:screen\s*)?(\w+)\s+to\s+(?:screen\s*)?(\w+)"
             ]
             
-            navigation_request = None
             for pattern in nav_patterns:
                 matches = re.search(pattern, user_message.lower())
                 if matches:
@@ -445,26 +527,28 @@ def process_message():
                             }
                             
                             # Find trigger components in source screen
-                            trigger_components = []
-                            for sc in source_screen.get("screen_components", []):
-                                for fc in sc.get("field_components", []):
-                                    if fc.get("isTriggerComponent") is True:
-                                        trigger_components.append({
-                                            "id": fc.get("fieldComponentId"),
-                                            "name": fc.get("fieldName", "Unknown"),
-                                            "label": fc.get("fieldLabel", ""),
-                                            "type": fc.get("fieldType", "Unknown")
-                                        })
+                            trigger_components = find_trigger_components(source_screen)
                             
                             # If only one trigger component exists, use it automatically
                             if len(trigger_components) == 1:
                                 navigation_request["trigger_component_id"] = trigger_components[0]["id"]
+                                # Make a note to inform the user about automatic selection
+                                auto_selected_trigger = {
+                                    "source_screen_id": source_id,
+                                    "source_screen_name": source_screen.get("screen_name", f"Screen {source_id}"),
+                                    "trigger_id": trigger_components[0]["id"],
+                                    "trigger_name": trigger_components[0].get("label") or trigger_components[0].get("name")
+                                }
+                            elif len(trigger_components) == 0:
+                                # Make a note that no trigger components were found
+                                no_triggers_found = True
                             
                             # Add the navigation
                             if "navigation" not in current_journey:
                                 current_journey["navigation"] = []
                             
                             current_journey["navigation"].append(navigation_request)
+                            navigation_added = True
                     
                     break
             
@@ -563,7 +647,7 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
             # Get Gemini's response
             response_text = get_gemini_response(gemini_prompt, user_message)
             
-                            # Check if the response is a clarification request rather than JSON
+            # Check if the response is a clarification request rather than JSON
             if not response_text.startswith('{') and not response_text.startswith('[') and '```json' not in response_text:
                 # This is a text response asking for clarification, not JSON
                 next_prompt = response_text
@@ -574,6 +658,9 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
                 if needs_trigger and ("trigger" in response_text.lower() or "navigation" in response_text.lower()):
                     # Find missing trigger components and offer user-friendly options
                     trigger_options = []
+                    no_trigger_screens = []
+                    auto_selected_screens = []
+                    
                     for nav in current_journey.get("navigation", []):
                         if "source_screen_id" in nav and "trigger_component_id" not in nav:
                             source_id = nav["source_screen_id"]
@@ -581,32 +668,46 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
                             
                             if source_screen:
                                 screen_name = source_screen.get("screen_name", f"Screen {source_id}")
-                                # Find trigger components in this screen
-                                trigger_components = []
-                                
-                                for sc in source_screen.get("screen_components", []):
-                                    for fc in sc.get("field_components", []):
-                                        if fc.get("isTriggerComponent") is True:
-                                            trigger_components.append({
-                                                "id": fc.get("fieldComponentId"),
-                                                "name": fc.get("fieldLabel", fc.get("fieldName", "Unknown")),
-                                                "type": fc.get("fieldType", "Unknown")
-                                            })
-                                
-                                if trigger_components:
+                                # Find ONLY trigger components in this screen (isTriggerComponent: true)
+                                trigger_components = find_trigger_components(source_screen)
+                            
+                                # If only one trigger component, select it automatically
+                                if len(trigger_components) == 1:
+                                    nav["trigger_component_id"] = trigger_components[0]["id"]
+                                    auto_selected_screens.append({
+                                        "screen_name": screen_name,
+                                        "trigger_name": trigger_components[0].get("label") or trigger_components[0].get("name"),
+                                        "trigger_id": trigger_components[0]["id"]
+                                    })
+                                elif len(trigger_components) > 1:
+                                    # Multiple options - let user choose
                                     options = ", ".join([f"{t['name']} (ID: {t['id']})" for t in trigger_components])
                                     trigger_options.append(f"For {screen_name}: {options}")
                                 else:
-                                    trigger_options.append(f"No trigger components found for {screen_name}. Please add a button or other triggerable component.")
+                                    no_trigger_screens.append(screen_name)
+                    
+                    # Build user-friendly response
+                    if auto_selected_screens:
+                        auto_msg = "I've automatically selected trigger components for screens with only one option:\n" + \
+                                "\n".join([f"• {s['screen_name']}: '{s['trigger_name']}' (ID: {s['trigger_id']})" for s in auto_selected_screens])
+                        trigger_options.insert(0, auto_msg)
+                    
+                    if no_trigger_screens:
+                        no_trigger_msg = "The following screens have no trigger components (buttons, etc.): " + ", ".join(no_trigger_screens) + ". " + \
+                                    "You need to add at least one component with 'isTriggerComponent: true' to each source screen."
+                        trigger_options.append(no_trigger_msg)
                     
                     if trigger_options:
-                        next_prompt = "To set up navigation between screens, please select a trigger component.\n\n" + \
-                                     "Available trigger components:\n" + "\n".join(trigger_options) + \
-                                     "\n\nYou can select one by saying something like 'use trigger component ID 10 for screen 1' or 'for screen abc use trigger component ID 3'."
+                        if all("trigger_component_id" in nav for nav in current_journey.get("navigation", [])):
+                            next_prompt = "Great! All your navigations now have trigger components assigned. You can continue building your journey or type 'confirm' when ready."
+                        else:
+                            next_prompt = "To set up navigation between screens, please select a trigger component.\n\n" + \
+                                        "Available trigger components:\n" + "\n".join(trigger_options)
+                            
+                            if any(("For " in opt and ":" in opt) for opt in trigger_options):
+                                next_prompt += "\n\nFor screens with multiple options, you can select one by saying 'use trigger component ID X for screen Y'."
                     else:
-                        next_prompt = "I need to know which component should trigger the navigation between screens. " + \
-                                     "However, I couldn't find any trigger components (buttons, etc.) in your source screens. " + \
-                                     "Please add a button component with isTriggerComponent set to true first."
+                        next_prompt = "I need to know which component should trigger the navigation. However, I couldn't find any trigger components in your source screens. Please add components with isTriggerComponent set to true."
                 
                 # Return early without updating the journey
                 return jsonify({
@@ -692,6 +793,13 @@ between screens that already exist in the journey.
                 # Add journey status message if not already included
                 if journey_status_message and journey_status_message not in next_prompt:
                     next_prompt = f"{next_prompt}{journey_status_message}"
+                
+                # Add custom notifications for navigation-related messages
+                if navigation_added:
+                    if auto_selected_trigger:
+                        next_prompt = f"I've added navigation between the screens. Since there is only one trigger component in {auto_selected_trigger['source_screen_name']}, I automatically selected '{auto_selected_trigger['trigger_name']}' (ID: {auto_selected_trigger['trigger_id']}) as the trigger component.\n\n{next_prompt}"
+                    elif no_triggers_found:
+                        next_prompt = "I've added the navigation connection, but couldn't find any trigger components in the source screen. Please add a button or other component with 'isTriggerComponent' set to true to complete the navigation setup.\n\n" + next_prompt
                 
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse JSON from Gemini response: {response_text}")
