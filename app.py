@@ -87,7 +87,7 @@ def fetch_all_components():
                     "validations": {},
                     "dataSource": "get_countries",
                     "dependencies": None,
-                    "isTriggerComponent": True,
+                    "isTriggerComponent": False,
                     "themeStyle": {
                         "styleId": 2,
                         "styleName": "defaultFieldStyle",
@@ -392,6 +392,82 @@ def process_message():
         
         # Process with Gemini
         try:
+            # Check if user is trying to create navigation between screens
+            nav_patterns = [
+                r"(?:go|navigate|move|proceed)\s+from\s+(?:screen\s*)?(\w+)\s+to\s+(?:screen\s*)?(\w+)",
+                r"(?:connect|link)\s+(?:screen\s*)?(\w+)\s+(?:to|and|with)\s+(?:screen\s*)?(\w+)",
+                r"(?:create|add|make)\s+(?:a\s+)?(?:navigation|link|connection)\s+(?:from\s+)?(?:screen\s*)?(\w+)\s+to\s+(?:screen\s*)?(\w+)"
+            ]
+            
+            navigation_request = None
+            for pattern in nav_patterns:
+                matches = re.search(pattern, user_message.lower())
+                if matches:
+                    source = matches.group(1)
+                    target = matches.group(2)
+                    
+                    # Try to identify screens by name or ID
+                    source_screen = None
+                    target_screen = None
+                    
+                    # Check if source/target are numbers (screen IDs) or names
+                    try:
+                        source_id = int(source)
+                        source_screen = next((s for s in current_journey.get("screens", []) if s.get("screen_id") == source_id), None)
+                    except ValueError:
+                        # Try to match by name (case insensitive)
+                        source_screen = next((s for s in current_journey.get("screens", []) if s.get("screen_name", "").lower() == source.lower()), None)
+                    
+                    try:
+                        target_id = int(target)
+                        target_screen = next((s for s in current_journey.get("screens", []) if s.get("screen_id") == target_id), None)
+                    except ValueError:
+                        # Try to match by name (case insensitive)
+                        target_screen = next((s for s in current_journey.get("screens", []) if s.get("screen_name", "").lower() == target.lower()), None)
+                    
+                    if source_screen and target_screen:
+                        # Add navigation entry if both screens exist and navigation doesn't already exist
+                        source_id = source_screen.get("screen_id")
+                        target_id = target_screen.get("screen_id")
+                        
+                        # Check if this navigation already exists
+                        nav_exists = any(
+                            nav.get("source_screen_id") == source_id and 
+                            nav.get("target_screen_id") == target_id 
+                            for nav in current_journey.get("navigation", [])
+                        )
+                        
+                        if not nav_exists:
+                            navigation_request = {
+                                "source_screen_id": source_id,
+                                "target_screen_id": target_id,
+                                "navigation_type": "button_click"
+                            }
+                            
+                            # Find trigger components in source screen
+                            trigger_components = []
+                            for sc in source_screen.get("screen_components", []):
+                                for fc in sc.get("field_components", []):
+                                    if fc.get("isTriggerComponent") is True:
+                                        trigger_components.append({
+                                            "id": fc.get("fieldComponentId"),
+                                            "name": fc.get("fieldName", "Unknown"),
+                                            "label": fc.get("fieldLabel", ""),
+                                            "type": fc.get("fieldType", "Unknown")
+                                        })
+                            
+                            # If only one trigger component exists, use it automatically
+                            if len(trigger_components) == 1:
+                                navigation_request["trigger_component_id"] = trigger_components[0]["id"]
+                            
+                            # Add the navigation
+                            if "navigation" not in current_journey:
+                                current_journey["navigation"] = []
+                            
+                            current_journey["navigation"].append(navigation_request)
+                    
+                    break
+            
             # Format available screen components
             screen_components_info = "\n".join([
                 f"- Name: {sc.get('screenComponentName', '')}, ID: {sc.get('screenComponentId', '')}" 
@@ -487,18 +563,57 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
             # Get Gemini's response
             response_text = get_gemini_response(gemini_prompt, user_message)
             
-            # Check if the response is a clarification request rather than JSON
+                            # Check if the response is a clarification request rather than JSON
             if not response_text.startswith('{') and not response_text.startswith('[') and '```json' not in response_text:
                 # This is a text response asking for clarification, not JSON
                 next_prompt = response_text
                 logger.info(f"Received clarification request from Gemini: {response_text}")
+                
+                # Check if it's asking for trigger component selection
+                needs_trigger = any("trigger_component_id" not in nav for nav in current_journey.get("navigation", []))
+                if needs_trigger and ("trigger" in response_text.lower() or "navigation" in response_text.lower()):
+                    # Find missing trigger components and offer user-friendly options
+                    trigger_options = []
+                    for nav in current_journey.get("navigation", []):
+                        if "source_screen_id" in nav and "trigger_component_id" not in nav:
+                            source_id = nav["source_screen_id"]
+                            source_screen = next((s for s in current_journey.get("screens", []) if s.get("screen_id") == source_id), None)
+                            
+                            if source_screen:
+                                screen_name = source_screen.get("screen_name", f"Screen {source_id}")
+                                # Find trigger components in this screen
+                                trigger_components = []
+                                
+                                for sc in source_screen.get("screen_components", []):
+                                    for fc in sc.get("field_components", []):
+                                        if fc.get("isTriggerComponent") is True:
+                                            trigger_components.append({
+                                                "id": fc.get("fieldComponentId"),
+                                                "name": fc.get("fieldLabel", fc.get("fieldName", "Unknown")),
+                                                "type": fc.get("fieldType", "Unknown")
+                                            })
+                                
+                                if trigger_components:
+                                    options = ", ".join([f"{t['name']} (ID: {t['id']})" for t in trigger_components])
+                                    trigger_options.append(f"For {screen_name}: {options}")
+                                else:
+                                    trigger_options.append(f"No trigger components found for {screen_name}. Please add a button or other triggerable component.")
+                    
+                    if trigger_options:
+                        next_prompt = "To set up navigation between screens, please select a trigger component.\n\n" + \
+                                     "Available trigger components:\n" + "\n".join(trigger_options) + \
+                                     "\n\nYou can select one by saying something like 'use trigger component ID 10 for screen 1' or 'for screen abc use trigger component ID 3'."
+                    else:
+                        next_prompt = "I need to know which component should trigger the navigation between screens. " + \
+                                     "However, I couldn't find any trigger components (buttons, etc.) in your source screens. " + \
+                                     "Please add a button component with isTriggerComponent set to true first."
                 
                 # Return early without updating the journey
                 return jsonify({
                     "journey_json": current_journey,
                     "next_prompt": next_prompt,
                     "final": False,
-                    "needs_trigger_selection": any("trigger_component_id" not in nav for nav in current_journey.get("navigation", []))
+                    "needs_trigger_selection": needs_trigger
                 })
             
             # Process JSON response
