@@ -5,6 +5,7 @@ import uuid
 import logging
 import json
 import re
+import requests
 from datetime import datetime
 
 # Configure logging
@@ -32,14 +33,8 @@ model = genai.GenerativeModel(
 # Session storage
 sessions = {}
 
-# Mock data for screen components
-MOCK_SCREEN_COMPONENTS = [
-    {"screen_component_id": 1, "screen_component_name": "CustomerDetails"},
-    {"screen_component_id": 2, "screen_component_name": "pan"},
-    {"screen_component_id": 3, "screen_component_name": "aadhar"},
-    {"screen_component_id": 4, "screen_component_name": "otp"},
-    {"screen_component_id": 5, "screen_component_name": "status"}
-]
+# Secondary backend API URL (configure as needed)
+SECONDARY_BACKEND_URL = "http://secondary-backend-service:8080"
 
 # Helper function to detect ambiguous inputs
 def is_ambiguous_input(message):
@@ -60,51 +55,118 @@ def get_gemini_response(prompt_text, user_message=None):
         logger.error(f"Gemini API error: {str(e)}")
         return '{}'
 
-# Function to fetch screen components (mocked)
-def fetch_screen_components():
-    """Mock function to fetch screen components from secondary backend"""
-    return MOCK_SCREEN_COMPONENTS
-
-# Function to fetch field components for a screen component
-def fetch_field_components(screen_component_name):
-    """Simplified field components fetch function with minimal data"""
-    logger.info(f"Fetching field components for: {screen_component_name}")
+# Function to fetch all screen components with their field components from secondary backend
+def fetch_all_components():
+    """Fetch all screen components and their field components from secondary backend"""
+    # For development/testing: using hardcoded data instead of API call
+    # In production, uncomment the API call below
     
-    # Basic components for different screen types (simplified)
-    basic_components = {
-        "CustomerDetails": [
-            {"fieldComponentId": 1, "fieldType": "largetext", "fieldName": "customerDetailsHeading", "fieldLabel": "Enter Customer Details", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
-            {"fieldComponentId": 10, "fieldType": "button", "fieldName": "customDtlBtn", "fieldLabel": "Proceed >", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": True, "style": "defaultFieldStyle"}
-        ],
-        "pan": [
-            {"fieldComponentId": 11, "fieldType": "largetext", "fieldName": "panDetailsHeading", "fieldLabel": "Enter PAN Details", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
-            {"fieldComponentId": 13, "fieldType": "button", "fieldName": "validatePanBtn", "fieldLabel": "Validate PAN", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": True, "style": "defaultFieldStyle"}
-        ],
-        "aadhar": [
-            {"fieldComponentId": 14, "fieldType": "largetext", "fieldName": "aadharHeadingDetails", "fieldLabel": "Enter Aadhar Details", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
-            {"fieldComponentId": 16, "fieldType": "button", "fieldName": "validateAadhar", "fieldLabel": "Validate Aadhar", 
-             "validations": {}, "dataSource": "validateaadhar", "dependencies": None, "isTriggerComponent": True, "style": "defaultFieldStyle"}
-        ],
-        "otp": [
-            {"fieldComponentId": 17, "fieldType": "largetext", "fieldName": "otpHeading", "fieldLabel": "Enter OTP", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
-            {"fieldComponentId": 18, "fieldType": "otp", "fieldName": "otp", "fieldLabel": "OTP", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"}
-        ],
-        "status": [
-            {"fieldComponentId": 19, "fieldType": "statustext", "fieldName": "status", "fieldLabel": "status", 
-             "validations": {}, "dataSource": None, "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"},
-            {"fieldComponentId": 20, "fieldType": "button", "fieldName": "homeScreenButton", "fieldLabel": "Home Screen", 
-             "validations": {}, "dataSource": "gotohomescreen", "dependencies": None, "isTriggerComponent": False, "style": "defaultFieldStyle"}
-        ]
-    }
+    # try:
+    #     response = requests.get(f"{SECONDARY_BACKEND_URL}/fetchAll")
+    #     if response.status_code == 200:
+    #         return response.json()
+    #     else:
+    #         logger.error(f"Failed to fetch components from secondary backend. Status code: {response.status_code}")
+    #         return []
+    # except Exception as e:
+    #     logger.error(f"Error fetching components from secondary backend: {str(e)}")
+    #     return []
     
-    return basic_components.get(screen_component_name, [])
+    # Hardcoded component data for development
+    return [
+        {
+            "screenComponentId": 1,
+            "screenComponentName": "aadhar",
+            "style": "defaultScreenComponentStyle",
+            "fieldComponents": [
+                {
+                    "fieldComponentId": 1,
+                    "fieldType": "drop_down",
+                    "fieldName": "country",
+                    "fieldLabel": "Country",
+                    "validations": {},
+                    "dataSource": "get_countries",
+                    "dependencies": None,
+                    "isTriggerComponent": True,
+                    "themeStyle": {
+                        "styleId": 2,
+                        "styleName": "defaultFieldStyle",
+                        "styleConfig": {
+                            "padding": "12.0",
+                            "borderRadius": "4.0",
+                            "borderColor": "#CCCCCC",
+                            "backgroundColor": "#FFFFFF",
+                            "fontSize": "14",
+                            "textColor": "#000000"
+                        },
+                        "theme": {
+                            "themeId": 1,
+                            "themeName": "lightTheme",
+                            "primaryColor": "#f8f8f8",
+                            "accentColor": "#0000FF",
+                            "textstyle": {
+                                "fontSize": 14,
+                                "fontFamily": "Roboto",
+                                "color": "#123456"
+                            },
+                            "createdAt": None,
+                            "updatedAt": None
+                        }
+                    },
+                    "createdAt": "2025-02-26T15:40:43.556707",
+                    "updatedAt": "2025-02-26T15:40:43.524369"
+                }
+            ],
+            "createdAt": "2025-02-26T15:40:50.960744",
+            "updatedAt": "2025-02-26T15:40:50.960748"
+        },
+        {
+            "screenComponentId": 2,
+            "screenComponentName": "pan",
+            "style": "defaultScreenComponentStyle",
+            "fieldComponents": [
+                {
+                    "fieldComponentId": 1,
+                    "fieldType": "drop_down",
+                    "fieldName": "country",
+                    "fieldLabel": "Country",
+                    "validations": {},
+                    "dataSource": "get_countries",
+                    "dependencies": None,
+                    "isTriggerComponent": False,
+                    "themeStyle": {
+                        "styleId": 2,
+                        "styleName": "defaultFieldStyle",
+                        "styleConfig": {
+                            "padding": "12.0",
+                            "borderRadius": "4.0",
+                            "borderColor": "#CCCCCC",
+                            "backgroundColor": "#FFFFFF",
+                            "fontSize": "14",
+                            "textColor": "#000000"
+                        },
+                        "theme": {
+                            "themeId": 1,
+                            "themeName": "lightTheme",
+                            "primaryColor": "#f8f8f8",
+                            "accentColor": "#0000FF",
+                            "textstyle": {
+                                "fontSize": 14,
+                                "fontFamily": "Roboto",
+                                "color": "#123456"
+                            },
+                            "createdAt": None,
+                            "updatedAt": None
+                        }
+                    },
+                    "createdAt": "2025-02-26T15:40:43.556707",
+                    "updatedAt": "2025-02-26T15:40:43.524369"
+                }
+            ],
+            "createdAt": "2025-02-26T15:40:50.960744",
+            "updatedAt": "2025-02-26T15:40:50.960748"
+        }
+    ]
 
 # Function to extract trigger component selection from user message
 def extract_trigger_selection(message, screen_names):
@@ -215,10 +277,10 @@ def start_session():
     # Generate a new session ID
     session_id = str(uuid.uuid4())
     
-    # Fetch available screen components
-    screen_components = fetch_screen_components()
+    # Fetch all components in a single API call
+    all_components = fetch_all_components()
     
-    # Initialize session with screen components info
+    # Initialize session with components info
     sessions[session_id] = {
         "journey": {
             "journey_name": "",
@@ -227,13 +289,16 @@ def start_session():
             "screens": [],
             "navigation": []
         },
-        "screen_components": screen_components
+        "all_components": all_components
     }
     
-    # Create welcome message
-    next_prompt = ("Hi! I'll help you create a journey for your banking application. "
-                  "What would you like to name this journey? "
-                  "Please tell me what type of journey you want to create (e.g., Savings Account Opening, Loan Application).")
+    # Create welcome message with available components
+    component_names = ", ".join([comp.get("screenComponentName", "") for comp in all_components])
+    
+    next_prompt = (f"Hi! I'll help you create a journey for your banking application. "
+                  f"What would you like to name this journey? "
+                  f"Please tell me what type of journey you want to create (e.g., Savings Account Opening, Loan Application). "
+                  f"You can use these components: {component_names}")
     
     logger.info(f"Session started: {session_id}")
     return jsonify({
@@ -256,6 +321,7 @@ def process_message():
     
     session_data = sessions[session_id]
     current_journey = session_data["journey"]
+    all_components = session_data["all_components"]
     
     # Check for confirmation or cancellation commands
     is_final = False
@@ -301,9 +367,10 @@ def process_message():
     else:
         # Check if user message is too ambiguous
         if is_ambiguous_input(user_message):
+            component_names = ", ".join([comp.get("screenComponentName", "") for comp in all_components])
             next_prompt = ("I need more specific information. Please provide details about what kind of screens "
-                          "you'd like to add, their names, and their components. You can choose from these components: " +
-                          ", ".join([comp["screen_component_name"] for comp in session_data["screen_components"]]))
+                          "you'd like to add, their names, and their components. You can choose from these components: " + 
+                          component_names)
             return jsonify({
                 "journey_json": current_journey,
                 "next_prompt": next_prompt,
@@ -327,8 +394,8 @@ def process_message():
         try:
             # Format available screen components
             screen_components_info = "\n".join([
-                f"- ID: {sc['screen_component_id']}, Name: {sc['screen_component_name']}" 
-                for sc in session_data["screen_components"]
+                f"- Name: {sc.get('screenComponentName', '')}, ID: {sc.get('screenComponentId', '')}" 
+                for sc in all_components
             ])
             
             # Create prompt for Gemini
@@ -458,10 +525,16 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
                         if "screen_component_style" not in sc:
                             sc["screen_component_style"] = "defaultScreenComponentStyle"
                         
-                        # Fetch field components if needed
+                        # Find matching component from the fetched components
                         component_name = sc.get("screen_component_name")
-                        if not sc.get("field_components") and component_name:
-                            sc["field_components"] = fetch_field_components(component_name)
+                        if component_name and (not sc.get("field_components") or len(sc.get("field_components")) == 0):
+                            # Find the complete component details from all_components
+                            matching_component = next(
+                                (comp for comp in all_components if comp.get("screenComponentName") == component_name), 
+                                None
+                            )
+                            if matching_component:
+                                sc["field_components"] = matching_component.get("fieldComponents", [])
                 
                 # Process navigation
                 for nav in journey_json.get("navigation", []):
@@ -478,20 +551,22 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
                     journey_status_message = f"\n\nTo complete your journey, you need to: {journey_status['message']}"
                 
                 # Generate next prompt for user guidance
+                component_names = ", ".join([comp.get("screenComponentName", "") for comp in all_components])
+                
                 next_prompt_prompt = f"""
 Based on the current journey JSON and the user's last message, generate a friendly, non-technical prompt 
 to guide the user to the next step in creating their journey. 
 
 Current journey: {json.dumps(journey_json, indent=2)}
 User's last message: {user_message}
+Available screen components: {component_names}
 
 Generate a helpful prompt that:
 1. Summarizes what has been done so far
-2. Lists the EXACT available screen components by name and asks the user to choose from ONLY these options
+2. Lists the EXACT available screen components by name and asks the user to choose from ONLY these options: {component_names}
 3. If there are journey completion requirements, include the message about what's needed to complete the journey
 4. Explains how to confirm, change or cancel
 5. If the user request is ambiguous (like "add 3 screens" without specifying what screens), add empty but structured screens objects with empty values and direct the user to put in values for each field politely.
-
 
 IMPORTANT: DO NOT mention any components or options not in the available screen components list.
 If the user tries to navigate to a non-existent screen, politely explain that they can only create navigation 
@@ -519,13 +594,6 @@ between screens that already exist in the journey.
         "final": is_final,
         "needs_trigger_selection": any("trigger_component_id" not in nav for nav in session_data["journey"].get("navigation", []))
     })
-
-# API endpoint to get field components (simplified)
-@app.route('/journey/api/field-components/<screen_component_name>', methods=['GET'])
-def get_field_components(screen_component_name):
-    """API endpoint to get field components for a specific screen component"""
-    field_components = fetch_field_components(screen_component_name)
-    return jsonify(field_components)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
