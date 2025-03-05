@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 import google.generativeai as genai
 import uuid
@@ -6,7 +6,7 @@ import logging
 import json
 import re
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = "journey_app_secret_key"
-CORS(app, resources={r"/*": {"origins": "*"}})
+app.config['SESSION_COOKIE_SECURE'] = True  # For HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+
+CORS(app, resources={r"/*": {"origins": "*", "supports_credentials": True}})
 
 # Initialize Gemini
 genai.configure(api_key="AIzaSyCD6DGeERwWQbBC6BK1Hq0ecagQj72rqyQ")
@@ -29,9 +33,6 @@ model = genai.GenerativeModel(
     ],
     generation_config={"temperature": 0.7, "top_p": 0.95, "top_k": 40}
 )
-
-# Session storage
-sessions = {}
 
 # Secondary backend API URL (configure as needed)
 SECONDARY_BACKEND_URL = "http://secondary-backend-service:8080"
@@ -348,7 +349,8 @@ def start_session():
     all_components = fetch_all_components()
     
     # Initialize session with components info
-    sessions[session_id] = {
+    session['journey_data'] = {
+        "session_id": session_id,
         "journey": {
             "journey_name": "",
             "journey_type": "single",
@@ -358,7 +360,6 @@ def start_session():
         },
         "all_components": all_components
     }
-    print(sessions)
     
     # Create welcome message with available components
     component_names = ", ".join([comp.get("screenComponentName", "") for comp in all_components])
@@ -382,16 +383,14 @@ def process_message():
     data = request.json
     session_id = data.get('session_id')
     user_message = data.get('message')
-
-    print(sessions)
-    print(user_message)
-    print(session_id)
     
-    if not session_id or not user_message or session_id not in sessions:
+    # Get session data from Flask session
+    session_data = session.get('journey_data')
+    
+    if not session_id or not user_message or not session_data or session_data.get('session_id') != session_id:
         logger.error(f"Invalid request: session_id={session_id}")
         return jsonify({"error": "Invalid session ID or message"}), 400
     
-    session_data = sessions[session_id]
     current_journey = session_data["journey"]
     all_components = session_data["all_components"]
     
@@ -416,9 +415,8 @@ def process_message():
             is_final = True
             next_prompt = "Your journey has been confirmed and saved. Thank you!"
             # Clean up the session after successful confirmation
-            if session_id in sessions:
-                del sessions[session_id]
-                logger.info(f"Session {session_id} cleared after confirmation")
+            session.pop('journey_data', None)
+            logger.info(f"Session {session_id} cleared after confirmation")
         else:
             next_prompt = f"Your journey cannot be confirmed yet. {validation_result['message']}"
     
@@ -431,13 +429,14 @@ def process_message():
             "screens": [],
             "navigation": []
         }
+        # Update session with reset journey
+        session['journey_data'] = session_data
         next_prompt = "Journey creation has been cancelled. Let's start again. What would you like to name this journey?"
     
     elif any(user_msg_lower == cmd for cmd in quit_commands):
         # Clean up the session when user quits
-        if session_id in sessions:
-            del sessions[session_id]
-            logger.info(f"Session {session_id} cleared after quit command")
+        session.pop('journey_data', None)
+        logger.info(f"Session {session_id} cleared after quit command")
         next_prompt = "Your journey session has been closed. Thank you for using our service."
         is_final = True
         
@@ -714,7 +713,10 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
                     else:
                         next_prompt = "I need to know which component should trigger the navigation. However, I couldn't find any trigger components in your source screens. Please add components with isTriggerComponent set to true."
                 
-                # Return early without updating the journey
+                # Save updated session data
+                session['journey_data'] = session_data
+                
+                # Return early without further processing
                 return jsonify({
                     "journey_json": current_journey,
                     "next_prompt": next_prompt,
@@ -765,6 +767,9 @@ If the input is too vague or ambiguous, do not generate a JSON structure - inste
                 # Update session data with processed journey
                 session_data["journey"] = journey_json
                 
+                # Save the updated session data
+                session['journey_data'] = session_data
+                
                 # Check for journey validation issues
                 journey_status = validate_journey(journey_json, full_check=False)
                 journey_status_message = ""
@@ -814,6 +819,10 @@ between screens that already exist in the journey.
         except Exception as e:
             logger.error(f"Error processing with Gemini: {str(e)}")
             next_prompt = "Sorry, I encountered an error processing your request. Please try again."
+    
+    # Save the updated session data (if not final)
+    if not is_final:
+        session['journey_data'] = session_data
     
     logger.info(f"Processed message for session {session_id}, is_final={is_final}")
     return jsonify({
