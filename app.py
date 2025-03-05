@@ -570,8 +570,10 @@ Your task is to generate JSON based on user requirements, following these rules:
 1. You must ONLY return valid JSON in your response - no explanations, no comments, no additional text.
 2. DO NOT make assumptions about the journey structure. If the user's request is vague or ambiguous, 
    do not generate JSON. Instead, return a plain text message asking for more specific details.
-3. Only add elements that the user explicitly requests. Do not populate screens or components unless 
-   specifically instructed by the user.
+3. CRITICAL: Only add elements that the user EXPLICITLY requests. DO NOT add any screen_components or field_components 
+   unless the user has EXPLICITLY asked for them by name. Create empty screens with empty screen_components arrays.
+4. NEVER automatically add CustomerDetails or any other component. Leave screen_components as an empty array [] unless 
+   the user specifically mentions adding a component.
 4. The journey structure MUST EXACTLY follow this format:
    ```json
    {{
@@ -584,14 +586,7 @@ Your task is to generate JSON based on user requirements, following these rules:
          "screen_name": "CustomerDetails",
          "template": "defaultTemplate",
          "style": "defaultScreenStyle",
-         "screen_components": [
-           {{
-             "screen_component_id": 1,
-             "screen_component_name": "CustomerDetails",
-             "screen_component_style": "defaultScreenComponentStyle",
-             "field_components": []
-           }}
-         ]
+         "screen_components": []  /* NOTE: screen_components should be an empty array unless explicitly requested */
        }}
      ],
      "navigation": [
@@ -635,6 +630,10 @@ Your task is to generate JSON based on user requirements, following these rules:
 12. Do NOT ASSUME or CREATE any data. Let the unknown fields be empty.
 
 13. If the user request is ambiguous (like "add 3 screens" without specifying what screens), add empty but structured screens objects with empty values and direct the user to put in values for each field politely.
+
+14. AGAIN FOR EMPHASIS: When creating screens, ALWAYS create them with EMPTY screen_components arrays like this:
+    "screen_components": []
+    Only add screen components when the user EXPLICITLY asks to add a specific component to a specific screen.
 
 Available screen components (ONLY USE THESE - no exceptions): 
 {screen_components_info}
@@ -789,14 +788,17 @@ Available screen components: {component_names}
 
 Generate a helpful prompt that:
 1. Summarizes what has been done so far
-2. Lists the EXACT available screen components by name and asks the user to choose from ONLY these options: {component_names}
-3. If there are journey completion requirements, include the message about what's needed to complete the journey
-4. Explains how to confirm, change or cancel
-5. If the user request is ambiguous (like "add 3 screens" without specifying what screens), add empty but structured screens objects with empty values and direct the user to put in values for each field politely.
+2. ONLY if the user needs to add components, explicitly list the available screen components by name: {component_names}
+3. If screens have been created but NO components have been added yet, prompt the user to ADD a specific component to a specific screen (e.g., "Would you like to add an 'aadhar' or 'pan' component to any of your screens?")
+4. If there are journey completion requirements, include the message about what's needed to complete the journey
+5. Explains how to confirm, change or cancel
 
-IMPORTANT: DO NOT mention any components or options not in the available screen components list.
-If the user tries to navigate to a non-existent screen, politely explain that they can only create navigation 
-between screens that already exist in the journey.
+IMPORTANT: 
+- NEVER suggest that components have already been added when they haven't
+- Only mention the EXACT available components in the list: {component_names}
+- If the user hasn't explicitly added components yet, make it clear they need to ADD components to the screens
+- Use very precise language like "Would you like to add one of these components to your screen: aadhar, pan"
+- If the user tries to navigate to a non-existent screen, politely explain that they can only create navigation between screens that already exist in the journey
 """
                 next_prompt = get_gemini_response(next_prompt_prompt)
                 
