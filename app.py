@@ -358,6 +358,7 @@ def start_session():
         },
         "all_components": all_components
     }
+    print(sessions)
     
     # Create welcome message with available components
     component_names = ", ".join([comp.get("screenComponentName", "") for comp in all_components])
