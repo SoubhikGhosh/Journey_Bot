@@ -381,6 +381,10 @@ def process_message():
     data = request.json
     session_id = data.get('session_id')
     user_message = data.get('message')
+
+    print(sessions)
+    print(user_message)
+    print(session_id)
     
     if not session_id or not user_message or session_id not in sessions:
         logger.error(f"Invalid request: session_id={session_id}")
